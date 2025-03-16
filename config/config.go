@@ -29,7 +29,7 @@ func InitDB() {
 	db.AutoMigrate(&models.User{},
 		&models.Task{},
 		&models.Blog{},
-		// &models.Wenjuan{}, &models.WenjuanAnswer{},
+		&models.Wenjuan{}, &models.WenjuanAnswer{},
 	)
 
 }
