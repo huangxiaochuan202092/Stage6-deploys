@@ -100,9 +100,12 @@
             margin: 5% auto;
             padding: 20px;
             width: 70%;
-            max-width: 600px;
+            max-width: 800px;
             border-radius: 8px;
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            max-height: 80vh; /* 最大高度为视窗高度的80% */
+            display: flex;
+            flex-direction: column;
         }
         .form-group {
             margin-bottom: 15px;
@@ -171,6 +174,8 @@
         .blog-detail {
             padding: 20px;
             line-height: 1.6;
+            overflow-y: auto; /* 添加滚动条 */
+            max-height: calc(70vh - 100px); /* 留出空间给点赞按钮 */
         }
         
         .blog-detail h3 {
@@ -234,6 +239,33 @@
         .jump-page button {
             padding: 6px 12px;
             font-size: 14px;
+        }
+
+        /* 美化滚动条 */
+        .blog-detail::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .blog-detail::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 4px;
+        }
+
+        .blog-detail::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 4px;
+        }
+
+        .blog-detail::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+
+        .like-section {
+            padding: 15px;
+            text-align: center;
+            background: white;
+            border-top: 1px solid #eee;
+            margin-top: auto; /* 保持在底部 */
         }
     </style>
 </head>
@@ -352,8 +384,8 @@
     <div id="viewBlogModal" class="modal">
         <div class="modal-content">
             <span class="close" onclick="closeModal('viewBlogModal')">&times;</span>
-            <div id="blogDetail"></div>
-            <div style="margin-top: 20px; text-align: center;">
+            <div id="blogDetail" class="blog-detail"></div>
+            <div class="like-section">
                 <button id="likeButton" class="like-btn">
                     ❤
                 </button>
@@ -608,12 +640,12 @@
             // searchBlogs();
         });
 
-        // 修改查看博客详情函数
+        // 修改查看博客详情函数，增加点赞状态处理
         function viewBlog(id) {
             fetch(`/user/blog/${id}`)
                 .then(response => response.json())
                 .then(blog => {
-                    console.log('获取到的博客详情数据:', blog); // 调试日志，查看实际数据结构
+                    console.log('获取到的博客详情数据:', blog);
                     
                     const detailHtml = `
                         <div class="blog-detail">
@@ -629,19 +661,30 @@
                     `;
                     
                     document.getElementById('blogDetail').innerHTML = detailHtml;
-                    document.getElementById('likeCount').textContent = blog.likes || 0;
+                    
+                    // 更新点赞状态和数量
+                    const likeButton = document.getElementById('likeButton');
+                    const likeCount = document.getElementById('likeCount');
+                    
+                    // 设置点赞数
+                    likeCount.textContent = blog.likes || 0;
                     
                     // 设置点赞按钮状态
-                    const likeButton = document.getElementById('likeButton');
+                    if (blog.isLiked) {
+                        likeButton.classList.add('active');
+                        likeButton.style.color = '#ff0000';
+                    } else {
+                        likeButton.classList.remove('active');
+                        likeButton.style.color = '#dc3545';
+                    }
+                    
+                    // 更新点击处理
                     likeButton.onclick = () => {
-                        if (likeButton.classList.contains('active')) {
+                        const isCurrentlyLiked = likeButton.classList.contains('active');
+                        if (isCurrentlyLiked) {
                             dislikeBlog(id);
-                            likeButton.classList.remove('active');
-                            likeButton.style.color = '#dc3545';
                         } else {
                             likeBlog(id);
-                            likeButton.classList.add('active');
-                            likeButton.style.color = '#ff0000';
                         }
                     };
                     
@@ -661,8 +704,16 @@
             .then(response => response.json())
             .then(result => {
                 if (result.message) {
+                    const likeButton = document.getElementById('likeButton');
                     const likeCount = document.getElementById('likeCount');
+                    
+                    // 更新点赞数和状态
                     likeCount.textContent = parseInt(likeCount.textContent) + 1;
+                    likeButton.classList.add('active');
+                    likeButton.style.color = '#ff0000';
+                    
+                    // 刷新博客列表以更新数据
+                    loadBlogs();
                 } else {
                     throw new Error(result.error || '点赞失败');
                 }
@@ -681,11 +732,19 @@
             .then(response => response.json())
             .then(result => {
                 if (result.message) {
+                    const likeButton = document.getElementById('likeButton');
                     const likeCount = document.getElementById('likeCount');
                     const currentLikes = parseInt(likeCount.textContent);
+                    
+                    // 更新点赞数和状态
                     if (currentLikes > 0) {
                         likeCount.textContent = currentLikes - 1;
                     }
+                    likeButton.classList.remove('active');
+                    likeButton.style.color = '#dc3545';
+                    
+                    // 刷新博客列表以更新数据
+                    loadBlogs();
                 } else {
                     throw new Error(result.error || '取消点赞失败');
                 }

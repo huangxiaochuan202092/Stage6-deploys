@@ -175,3 +175,20 @@ func DislikeBlog(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "博客取消点赞成功"})
 }
+
+// 获取点赞数
+func GetLikeCount(c *gin.Context) {
+	id := c.Param("id")
+	idUint, err := strconv.ParseUint(id, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的ID"})
+		return
+	}
+	count, err := services.GetLikeCount(int(idUint))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "博客点赞数", "count": count})
+}
+

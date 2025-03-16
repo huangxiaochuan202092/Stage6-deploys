@@ -83,3 +83,12 @@ func DislikeBlog(id int) error {
 	}
 	return nil
 }
+
+// 获取点赞数
+func GetLikeCount(id int) (int, error) {
+	var blog models.Blog
+	if err := config.DB.Unscoped().Where("id = ?", id).First(&blog).Error; err != nil {
+		return 0, err
+	}
+	return blog.Likes, nil
+}
