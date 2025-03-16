@@ -28,7 +28,7 @@ func InitDB() {
 	DB = db
 	db.AutoMigrate(&models.User{},
 		&models.Task{},
-		//  &models.Blog{},
+		&models.Blog{},
 		// &models.Wenjuan{}, &models.WenjuanAnswer{},
 	)
 
