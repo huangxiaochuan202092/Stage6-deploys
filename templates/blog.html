@@ -189,6 +189,52 @@
             border-radius: 4px;
             white-space: pre-wrap;
         }
+        
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-top: 20px;
+            gap: 15px;
+            padding: 10px;
+            background: #fff;
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .jump-page {
+            display: flex;
+            align-items: center;
+            background: #f8f9fa;
+            padding: 5px 10px;
+            border-radius: 4px;
+            gap: 10px;
+        }
+
+        .jump-page input {
+            width: 60px;
+            padding: 6px 8px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            text-align: center;
+            font-size: 14px;
+        }
+
+        .jump-page input:focus {
+            outline: none;
+            border-color: #007bff;
+            box-shadow: 0 0 0 2px rgba(0,123,255,0.25);
+        }
+
+        .jump-page label {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .jump-page button {
+            padding: 6px 12px;
+            font-size: 14px;
+        }
     </style>
 </head>
 <body>
@@ -220,6 +266,17 @@
             </thead>
             <tbody id="blogList"></tbody>
         </table>
+        
+        <div class="pagination">
+            <button onclick="changePage(currentPage - 1)" id="prevBtn" class="btn btn-primary">上一页</button>
+            <span id="pageInfo" style="font-size: 14px; color: #666;"></span>
+            <button onclick="changePage(currentPage + 1)" id="nextBtn" class="btn btn-primary">下一页</button>
+            <div class="jump-page">
+                <label>跳转到：</label>
+                <input type="number" id="pageInput" min="1" placeholder="页码">
+                <button onclick="jumpToPage()" class="btn btn-primary">确定</button>
+            </div>
+        </div>
     </div>
 
     <!-- 添加博客模态框 -->
@@ -306,16 +363,21 @@
     </div>
 
     <script>
+        // 添加分页变量
+        let currentPage = 1;
+        const pageSize = 10;
+        let totalPages = 0;
+
         // 修改加载博客列表函数
         function loadBlogs() {
-            fetch('/user/blog')
+            fetch(`/user/blog?page=${currentPage}&pageSize=${pageSize}`)
                 .then(response => response.json())
-                .then(blogs => {
-                    console.log('Debug - 接收到的数据:', blogs); // 调试日志
+                .then(result => {
+                    console.log('Debug - 接收到的数据:', result);
                     const tbody = document.getElementById('blogList');
                     tbody.innerHTML = '';
                     
-                    if (!blogs || blogs.length === 0) {
+                    if (!result.data || result.data.length === 0) {
                         tbody.innerHTML = `
                             <tr>
                                 <td colspan="8" style="text-align:center">暂无博客数据</td>
@@ -324,7 +386,11 @@
                         return;
                     }
 
-                    blogs.forEach(blog => {
+                    // 更新总页数
+                    totalPages = Math.ceil(result.total / pageSize);
+                    updatePagination();
+
+                    result.data.forEach(blog => {
                         tbody.innerHTML += `
                             <tr>
                                 <td>${blog.ID || ''}</td>
@@ -628,6 +694,41 @@
                 console.error('取消点赞失败:', error);
                 alert('取消点赞失败，请重试');
             });
+        }
+
+        // 添加分页更新函数
+        function updatePagination() {
+            const pageInfo = document.getElementById('pageInfo');
+            pageInfo.textContent = `第 ${currentPage} 页 / 共 ${totalPages} 页`;
+
+            // 更新按钮状态
+            document.getElementById('prevBtn').disabled = currentPage <= 1;
+            document.getElementById('nextBtn').disabled = currentPage >= totalPages;
+            
+            // 更新页码输入框最大值
+            document.getElementById('pageInput').max = totalPages;
+        }
+
+        // 添加页码切换函数
+        function changePage(newPage) {
+            if (newPage < 1 || newPage > totalPages) return;
+            currentPage = newPage;
+            loadBlogs();
+        }
+
+        // 添加跳转页面函数
+        function jumpToPage() {
+            const pageInput = document.getElementById('pageInput');
+            const targetPage = parseInt(pageInput.value);
+            
+            if (isNaN(targetPage) || targetPage < 1 || targetPage > totalPages) {
+                alert(`请输入1到${totalPages}之间的页码`);
+                return;
+            }
+            
+            currentPage = targetPage;
+            loadBlogs();
+            pageInput.value = ''; // 清空输入框
         }
 
         // 页面加载时获取博客列表

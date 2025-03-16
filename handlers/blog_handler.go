@@ -41,15 +41,38 @@ func CreateBlog(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "博客创建成功"})
 }
 
-// 获取博客列表
 func GetAllBlogs(c *gin.Context) {
-	blogs, err := services.GetAllBlogs()
+	// 获取分页参数
+	pageStr := c.DefaultQuery("page", "1")          // 默认第一页
+	pageSizeStr := c.DefaultQuery("pageSize", "10") // 默认每页 10 条
+
+	// 转换为整数
+	page, err := strconv.Atoi(pageStr)
+	if err != nil || page < 1 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的分页参数"})
+		return
+	}
+
+	pageSize, err := strconv.Atoi(pageSizeStr)
+	if err != nil || pageSize < 1 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的分页大小参数"})
+		return
+	}
+
+	// 调用服务层获取分页数据
+	blogs, total, err := services.GetAllBlogs(page, pageSize)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, blogs)
+	// 返回分页结果
+	c.JSON(http.StatusOK, gin.H{
+		"page":     page,
+		"pageSize": pageSize,
+		"total":    total,
+		"data":     blogs,
+	})
 }
 
 // 获取单个博客

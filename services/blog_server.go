@@ -18,12 +18,22 @@ func CreateBlog(blog *models.Blog) error {
 }
 
 // 获取博客列表
-func GetAllBlogs() ([]models.Blog, error) {
+func GetAllBlogs(page, pageSize int) ([]models.Blog, int64, error) {
 	var blogs []models.Blog
-	if err := config.DB.Unscoped().Find(&blogs).Error; err != nil {
-		return nil, err
+	var total int64
+
+	// 查询总记录数
+	if err := config.DB.Unscoped().Model(&models.Blog{}).Count(&total).Error; err != nil {
+		return nil, 0, err
 	}
-	return blogs, nil
+
+	// 分页查询
+	offset := (page - 1) * pageSize
+	if err := config.DB.Unscoped().Offset(offset).Limit(pageSize).Find(&blogs).Error; err != nil {
+		return nil, 0, err
+	}
+
+	return blogs, total, nil
 }
 
 // 获取单个博客
