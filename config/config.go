@@ -26,10 +26,12 @@ func InitDB() {
 	sqlDB.SetConnMaxLifetime(time.Hour)
 
 	DB = db
-	db.AutoMigrate(&models.User{},
-		&models.Task{},
-		&models.Blog{},
-		&models.Wenjuan{}, &models.WenjuanAnswer{},
+	db.AutoMigrate(&models.User{}, //用户表
+		&models.Task{},                             //任务表
+		&models.Blog{},                             //博客
+		&models.Wenjuan{}, &models.WenjuanAnswer{}, //答案和问卷
+		&models.Category{},        //分类表
+		&models.WenjuanCategory{}, //中间表
 	)
 
 }

@@ -103,121 +103,120 @@
                 <label for="code">验证码:</label>
                 <input type="text" id="code" required placeholder="请输入验证码" maxlength="6">
             </div>
+
             <button type="submit" id="submitBtn">登录/注册</button>
             <div id="message" class="message"></div>
         </form>
     </div>
 
-    <script>
-        function showMessage(message, isError = false) {
-            const messageEl = document.getElementById('message');
-            messageEl.textContent = message;
-            messageEl.className = `message ${isError ? 'error' : 'success'}`;
-            messageEl.style.display = 'block';
-            setTimeout(() => {
-                messageEl.style.display = 'none';
-            }, 3000);
+<script>
+function showMessage(message, isError = false) {
+    const messageEl = document.getElementById('message');
+    messageEl.textContent = message;
+    messageEl.className = `message ${isError ? 'error' : 'success'}`;
+    messageEl.style.display = 'block';
+    setTimeout(() => {
+        messageEl.style.display = 'none';
+    }, 3000);
+}
+
+let isCooldown = false;
+
+async function sendCode() {
+    const email = document.getElementById('email').value;
+    if (!email) {
+        showMessage('请输入邮箱地址', true);
+        return;
+    }
+
+    const button = event.target;
+    if (isCooldown) return;
+
+    try {
+        button.disabled = true;
+        isCooldown = true;
+        
+        const response = await fetch('/user/send-code', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ email })
+        });
+        
+        const result = await response.json();
+        
+        if (!response.ok) {
+            showMessage(result.error || '发送失败', true);
+            return;
         }
 
-        let isCooldown = false;
+        showMessage('验证码已发送，请查收邮件');
         
-        async function sendCode() {
-            const email = document.getElementById('email').value;
-            if (!email) {
-                showMessage('请输入邮箱地址', true);
-                return;
-            }
-
-            const button = event.target;
-            if (isCooldown) return;
-
-            try {
-                button.disabled = true;
-                isCooldown = true;
-                
-                const response = await fetch('/user/send-code', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ email })
-                });
-                
-                const result = await response.json();
-                
-                if (!response.ok) {
-                    showMessage(result.error || '发送失败', true);
-                    return;
-                }
-
-                showMessage('验证码已发送，请查收邮件');
-                
-                let countdown = 60;
-                const timer = setInterval(() => {
-                    button.textContent = `${countdown}秒后重试`;
-                    countdown--;
-                    if (countdown < 0) {
-                        clearInterval(timer);
-                        button.textContent = '获取验证码';
-                        button.disabled = false;
-                        isCooldown = false;
-                    }
-                }, 1000);
-            } catch (error) {
-                showMessage('发送失败，请重试', true);
+        let countdown = 60;
+        const timer = setInterval(() => {
+            button.textContent = `${countdown}秒后重试`;
+            countdown--;
+            if (countdown < 0) {
+                clearInterval(timer);
+                button.textContent = '获取验证码';
                 button.disabled = false;
                 isCooldown = false;
             }
+        }, 1000);
+    } catch (error) {
+        showMessage('发送失败，请重试', true);
+        button.disabled = false;
+        isCooldown = false;
+    }
+}
+
+document.getElementById('authForm').addEventListener('submit', async function(event) {
+    event.preventDefault();
+    
+    const email = document.getElementById('email').value;
+    const code = document.getElementById('code').value;
+    const submitBtn = document.getElementById('submitBtn');
+    
+    if (!email || !code) {
+        showMessage('请填写完整信息', true);
+        return;
+    }
+
+    try {
+        submitBtn.disabled = true;
+        submitBtn.textContent = '处理中...';
+
+        const response = await fetch('/user/login-or-register', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ email, code })
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            showMessage(result.error || '验证失败', true);
+            submitBtn.disabled = false;
+            submitBtn.textContent = '登录/注册';
+            return;
         }
 
-        document.getElementById('authForm').addEventListener('submit', async function(event) {
-            event.preventDefault();
-            
-            const email = document.getElementById('email').value;
-            const code = document.getElementById('code').value;
-            const submitBtn = document.getElementById('submitBtn');
+        showMessage('验证成功，正在跳转...', false);
+        
+        localStorage.setItem('userInfo', JSON.stringify({
+            email: email,
+            ...result.user
+        }));
 
-            if (!email || !code) {
-                showMessage('请填写完整信息', true);
-                return;
-            }
+        setTimeout(() => {
+            window.location.href = '/admin';
+        }, 1000);
 
-            try {
-                submitBtn.disabled = true;
-                submitBtn.textContent = '处理中...';
-
-                const response = await fetch('/user/login-or-register', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ email, code })
-                });
-
-                const result = await response.json();
-
-                if (!response.ok) {
-                    showMessage(result.error || '验证失败', true);
-                    submitBtn.disabled = false;
-                    submitBtn.textContent = '登录/注册';
-                    return;
-                }
-
-                // 保存用户信息
-                localStorage.setItem('userInfo', JSON.stringify({
-                    email: email,
-                    ...result.user
-                }));
-
-                showMessage('验证成功，正在跳转...', false);
-                
-                // 延迟跳转到后台页面
-                setTimeout(() => {
-                    window.location.href = '/admin';
-                }, 1500);
-
-            } catch (error) {
-                showMessage('请求失败，请重试', true);
-                submitBtn.disabled = false;
-                submitBtn.textContent = '登录/注册';
-            }
-        });
-    </script>
+    } catch (error) {
+        showMessage('请求失败，请重试', true);
+        submitBtn.disabled = false;
+        submitBtn.textContent = '登录/注册';
+    }
+});
+</script>
 </body>
 </html>

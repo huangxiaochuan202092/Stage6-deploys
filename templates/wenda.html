@@ -1,0 +1,1686 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>问卷管理系统</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .nav { margin-bottom: 20px; }
+        .nav button { padding: 8px 16px; margin-right: 10px; }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; }
+        .form-group input, .form-group textarea { width: 100%; padding: 8px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+        th { background-color: #f5f5f5; }
+        .modal { display: none; position: fixed; top: 50%; left: 50%; 
+                transform: translate(-50%, -50%); background: white; 
+                padding: 20px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        .modal .modal-content { max-height: 80vh; overflow-y: auto; }
+        .category-list { margin-top: 20px; }
+        .category-item { padding: 10px; border: 1px solid #ddd; margin-bottom: 5px; }
+        .error-message { color: red; font-size: 12px; margin-top: 5px; }
+        .question-input { width: 300px; height: 100px; border: 2px solid blue; }
+        .question-input.error { border-color: red; }
+        .answer-input {
+            border: 1px solid #ddd;
+            padding: 8px;
+            border-radius: 4px;
+        }
+        .answer-input:focus {
+            border-color: #0066cc;
+            outline: none;
+        }
+        #search-results {
+            margin-bottom: 20px;
+        }
+        #answer-form {
+            background: #f9f9f9;
+            padding: 20px;
+            border-radius: 4px;
+        }
+        /* 添加新的样式 */
+        .detail-container {
+            padding: 15px;
+        }
+
+        .detail-title {
+            font-size: 18px;
+            color: #333;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .detail-item {
+            margin-bottom: 15px;
+        }
+
+        .detail-label {
+            font-weight: bold;
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        .question-list {
+            list-style: none;
+            padding: 0;
+            margin: 10px 0;
+        }
+
+        .question-item {
+            background: #f5f5f5;
+            padding: 10px;
+            margin-bottom: 8px;
+            border-radius: 4px;
+        }
+
+        .answer-list {
+            list-style: none;
+            padding: 0;
+            margin: 10px 0;
+        }
+
+        .answer-item {
+            background: #fff;
+            padding: 10px;
+            margin-bottom: 8px;
+            border: 1px solid #e8e8e8;
+            border-radius: 4px;
+        }
+
+        .answer-item .answer-time {
+            font-size: 12px;
+            color: #999;
+            margin-top: 5px;
+        }
+
+        .no-answers {
+            color: #999;
+            font-style: italic;
+        }
+
+        .edit-mode input, .edit-mode textarea {
+            width: 100%;
+            padding: 8px;
+            margin: 5px 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        .edit-buttons {
+            margin-top: 15px;
+            text-align: right;
+        }
+
+        .edit-buttons button {
+            margin-left: 10px;
+            padding: 5px 15px;
+        }
+
+        .edit-question-item {
+            position: relative;
+            margin-bottom: 15px;
+            padding: 10px;
+            background: #f9f9f9;
+            border-radius: 4px;
+        }
+
+        .edit-question-item input {
+            width: calc(100% - 100px);
+            margin-right: 10px;
+        }
+
+        .edit-question-actions {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+
+        .edit-answer-item {
+            position: relative;
+            padding: 15px;
+            background: #fff;
+            border: 1px solid #eee;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+
+        .edit-answer-content {
+            margin-bottom: 10px;
+        }
+
+        .edit-section {
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        .edit-section-title {
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        .category-actions {
+            margin-top: 10px;
+        }
+
+        .category-actions button {
+            margin-right: 8px;
+            padding: 4px 8px;
+        }
+
+        .edit-category-form {
+            margin-top: 10px;
+            padding: 10px;
+            background: #f5f5f5;
+            border-radius: 4px;
+            display: none;
+        }
+
+        .question-item {
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+        }
+
+        .question-item input {
+            flex: 1;
+            margin-right: 10px;
+        }
+
+        .question-item button {
+            padding: 4px 8px;
+            background: #ff4d4d;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .question-item button:hover {
+            background: #ff3333;
+        }
+
+        .back-button {
+            background-color: #409EFF;
+            color: white;
+            border: none;
+            padding: 8px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 15px;
+        }
+
+        .back-button:hover {
+            background-color: #66b1ff;
+        }
+
+        .jump-page {
+            display: inline-flex;
+            align-items: center;
+            margin-left: 10px;
+        }
+
+        .jump-page input {
+            width: 60px;
+            padding: 4px 8px;
+            margin: 0 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        .jump-page button {
+            padding: 4px 8px;
+            background: #409EFF;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .jump-page button:hover {
+            background: #66b1ff;
+        }
+
+        .pinned-row {
+            background-color: #f0f8ff !important;
+        }
+
+        .pin-button {
+            padding: 4px 8px;
+            background: #409EFF;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 5px;
+        }
+
+        .pin-button:hover {
+            background: #66b1ff;
+        }
+
+        .title-cell {
+            cursor: pointer;
+        }
+
+        .title-cell:hover {
+            color: #409EFF;
+        }
+
+        .moving-row {
+            transition: transform 0.3s ease-in-out;
+        }
+
+        .pinned-row {
+            background-color: #f0f8ff;
+            border-left: 3px solid #409EFF;
+        }
+        
+        .pin-button {
+            background-color: transparent;
+            color: #409EFF;
+            border: 1px solid #409EFF;
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .pin-button.pinned {
+            background-color: #409EFF;
+            color: white;
+        }
+        
+        .moving-row {
+            animation: moveToTop 0.5s ease-in-out;
+        }
+        
+        @keyframes moveToTop {
+            from {
+                transform: translateY(20px);
+                opacity: 0.5;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+        .search-pagination {
+            margin-top: 20px;
+            text-align: center;
+        }
+
+        .search-pagination button {
+            padding: 5px 15px;
+            margin: 0 5px;
+            background: #409EFF;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .search-pagination button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .search-pagination span {
+            margin: 0 10px;
+        }
+
+        #search-title {
+            width: 300px;
+            padding: 8px;
+            margin-right: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        #search-title:focus {
+            border-color: #409EFF;
+            outline: none;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="nav">
+        <button class="back-button" onclick="goBack()">返回后台</button>
+        <button onclick="showSection('questionnaire-list')">问卷列表</button>
+        <button onclick="showSection('create-questionnaire')">创建问卷</button>
+        <button onclick="showSection('answer-management')">答案管理</button>
+        <button onclick="showSection('category-management')">分类管理</button>
+    </div>
+
+    <!-- 问卷列表 -->
+    <div id="questionnaire-list" class="section">
+        <h2>问卷列表</h2>
+        <div class="filter">
+            <label>是否置顶：<input type="checkbox" id="filter-pinned" onchange="loadQuestionnaires()"></label>
+        </div>
+        <table id="questionnaires-table">
+            <thead>
+            <tr>
+                <th>ID</th>
+                <th>标题</th>
+                <th>状态</th>
+                <th>截止日期</th>
+                <th>操作</th>
+            </tr>
+            </thead>
+            <tbody>
+            <!-- 动态填充 -->
+            </tbody>
+        </table>
+        <div class="paginator">
+            <button onclick="prevPage()">上一页</button>
+            <span id="page-info">第1页/共1页</span>
+            <button onclick="nextPage()">下一页</button>
+            <div class="jump-page">
+                <span>跳转到</span>
+                <input type="number" id="jump-page-input" min="1" placeholder="页码">
+                <button onclick="jumpToPage()">确定</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 创建问卷 -->
+    <div id="create-questionnaire" class="section" style="display:none">
+        <h2>创建问卷</h2>
+        <div class="form-group">
+            <label>标题</label>
+            <input type="text" id="title">
+        </div>
+        <div class="form-group">
+            <label>问题列表</label>
+            <div id="create-questions-container">
+                <div class="question-item">
+                    <input type="text" class="question-input" placeholder="请输入问题">
+                </div>
+            </div>
+            <button type="button" onclick="addQuestionInput()" style="margin-top: 10px;">添加问题</button>
+            <div class="error-message" id="content-error"></div>
+        </div>
+        <div class="form-group">
+            <label>状态</label>
+            <select id="status">
+                <option value="draft">草稿</option>
+                <option value="published">已发布</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>截止日期</label>
+            <input type="datetime-local" id="deadline">
+        </div>
+        <div class="form-group">
+            <label>分类</label>
+            <select id="category">
+                <option value="">无分类</option>
+            </select>
+        </div>
+        <button onclick="createOrUpdateQuestionnaire()">提交</button>
+    </div>
+
+    <!-- 答卷管理 -->
+    <div id="answer-management" class="section" style="display:none">
+        <h2>答卷管理</h2>
+        <div class="form-group">
+            <label>搜索问卷</label>
+            <input type="text" id="search-title" placeholder="输入问卷标题搜索">
+            <button onclick="searchWenjuans(1)">搜索</button>
+        </div>
+        
+        <!-- 问卷搜索结果列表 -->
+        <div id="search-results" style="margin-top: 20px;">
+            <table id="wenjuan-search-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>标题</th>
+                        <th>状态</th>
+                        <th>创建时间</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- 动态填充 -->
+                </tbody>
+            </table>
+            <!-- 添加搜索结果分页 -->
+            <div class="search-pagination" style="margin-top: 20px;">
+                <button id="prev-search-page" onclick="searchPrevPage()">上一页</button>
+                <span id="search-page-info">第1页/共1页</span>
+                <button id="next-search-page" onclick="searchNextPage()">下一页</button>
+                <span style="margin-left: 10px;">总记录数: <span id="search-total-count">0</span></span>
+            </div>
+        </div>
+
+        <!-- 答题区域 -->
+        <div id="answer-form" style="display:none; margin-top: 20px;">
+            <h3>问卷答题</h3>
+            <div id="wenjuan-info"></div>
+            <div id="questions-container">
+                <!-- 动态填充问题 -->
+            </div>
+            <button onclick="submitAnswers()" style="margin-top: 20px;">提交答案</button>
+        </div>
+    </div>
+
+    <!-- 分类管理 -->
+    <div id="category-management" class="section" style="display:none">
+        <h2>分类管理</h2>
+        <div class="form-group">
+            <label>分类名称</label>
+            <input type="text" id="category-name">
+        </div>
+        <div class="form-group">
+            <label>描述</label>
+            <textarea id="category-desc" rows="2"></textarea>
+        </div>
+        <button onclick="createCategory()">创建分类</button>
+        <div class="category-list" id="category-list">
+            <!-- 动态填充 -->
+        </div>
+    </div>
+
+    <!-- 详情模态框 -->
+    <div id="modal" class="modal">
+        <div class="modal-content">
+            <h3>问卷详情</h3>
+            <div id="modal-body"></div>
+            <button onclick="closeModal()">关闭</button>
+        </div>
+    </div>
+</div>
+
+<script>
+const API_URL = 'http://localhost:8080';
+let currentPage = 1;
+let totalPages = 1;
+let categories = [];
+let currentWenjuanForAnswer = null; // 存储当前问卷数据
+
+// 页面切换
+function showSection(sectionId) {
+    document.querySelectorAll('.section').forEach(sec => sec.style.display = 'none');
+    document.getElementById(sectionId).style.display = 'block';
+    if(sectionId === 'questionnaire-list') loadQuestionnaires();
+    if(sectionId === 'category-management') loadCategories();
+    if(sectionId === 'create-questionnaire') loadCategoriesSelect();
+}
+
+// 修改加载问卷列表函数
+async function loadQuestionnaires(page = 1, pageSize = 10) {
+    try {
+        const response = await fetch(`${API_URL}/user/wenjuans?page=${page}&pageSize=${pageSize}`);
+        if (!response.ok) throw new Error('加载失败');
+        
+        const data = await response.json();
+        const tbody = document.querySelector('#questionnaires-table tbody');
+        tbody.innerHTML = '';
+
+        if (!data.data || !Array.isArray(data.data.list)) {
+            return;
+        }
+
+        const questionnaires = data.data.list;
+        const total = data.data.total || questionnaires.length;
+
+        // 按照置顶状态和创建时间排序
+        questionnaires.sort((a, b) => {
+            // 优先按置顶状态排序
+            if (a.is_pinned !== b.is_pinned) {
+                return b.is_pinned ? 1 : -1;
+            }
+            // 其次按创建时间降序
+            return new Date(b.created_at) - new Date(a.created_at);
+        });
+
+        // 渲染问卷列表
+        questionnaires.forEach(q => {
+            appendQuestionnaireRow(q, tbody);
+        });
+
+        currentPage = page;
+        totalPages = Math.ceil(total / pageSize);
+        document.getElementById('page-info').textContent = `第${page}页/共${totalPages}页`;
+    } catch (error) {
+        console.error('加载问卷列表失败:', error);
+        alert('加载失败');
+    }
+}
+
+// 分页导航
+function prevPage() {
+    if(currentPage > 1) loadQuestionnaires(currentPage-1);
+}
+function nextPage() {
+    if(currentPage < totalPages) loadQuestionnaires(currentPage+1);
+}
+
+// 修改问卷详情显示函数
+async function showQuestionnaire(id) {
+    try {
+        document.getElementById('modal').style.display = 'block';
+        const modalBody = document.getElementById('modal-body');
+        modalBody.innerHTML = '<div style="text-align: center;">加载中...</div>';
+
+        const response = await fetch(`${API_URL}/user/wenjuans/${id}`);
+        if (!response.ok) {
+            throw new Error('获取问卷失败');
+        }
+        
+        const data = await response.json();
+        const questions = JSON.parse(data.content);
+        
+        modalBody.innerHTML = `
+            <div class="detail-container" data-wenjuan-id="${id}">
+                <div class="detail-title">${escapeHtml(data.title)}</div>
+                
+                <div class="detail-item">
+                    <div class="detail-label">基本信息</div>
+                    <div>状态：${escapeHtml(data.status)}</div>
+                    <div>创建时间：${new Date(data.created_at).toLocaleString()}</div>
+                    <div>截止日期：${data.deadline ? new Date(data.deadline).toLocaleString() : '无'}</div>
+                </div>
+
+                <div class="detail-item">
+                    <div class="detail-label">问题列表</div>
+                    <ul class="question-list">
+                        ${questions.map((q, index) => `
+                            <li class="question-item">
+                                <span class="question-number">${index + 1}. </span>
+                                ${escapeHtml(q)}
+                            </li>
+                        `).join('')}
+                    </ul>
+                </div>
+
+                <div class="detail-item">
+                    <div class="detail-label">答案列表</div>
+                    ${data.answers && data.answers.length > 0 ? `
+                        <ul class="answer-list">
+                            ${data.answers.map(answer => {
+                                const answerContent = JSON.parse(answer.answer || answer.Answer);
+                                return `
+                                    <li class="answer-item">
+                                        ${questions.map((q, i) => `
+                                            <div>
+                                                <strong>问${i + 1}：</strong>${escapeHtml(q)}<br>
+                                                <strong>答：</strong>${escapeHtml(answerContent[i] || '未答')}
+                                            </div>
+                                        `).join('<hr style="margin: 8px 0; border: none; border-top: 1px dashed #eee;">')}
+                                        <div class="answer-time">
+                                            提交时间：${new Date(answer.created_at).toLocaleString()}
+                                            ${answer.updated_at && answer.updated_at !== answer.created_at ? 
+                                                `<br>最后修改：${new Date(answer.updated_at).toLocaleString()}` : ''}
+                                        </div>
+                                    </li>
+                                `;
+                            }).join('')}
+                        </ul>
+                    ` : '<div class="no-answers">暂无答案</div>'}
+                </div>
+            </div>
+        `;
+    } catch (error) {
+        console.error('查看详情失败:', error);
+        modalBody.innerHTML = `<div class="error-message">加载失败: ${error.message}</div>`;
+    }
+}
+
+// 关闭模态框
+function closeModal() {
+    document.getElementById('modal').style.display = 'none';
+}
+
+// 添加新的辅助函数，用于格式化问题内容
+function formatQuestions(content) {
+    try {
+        // 如果已经是有效的JSON数组，直接返回
+        const parsed = JSON.parse(content);
+        if (Array.isArray(parsed)) {
+            return content;
+        }
+    } catch (e) {
+        // 不是有效的JSON，继续处理
+    }
+
+    // 移除所有多余的空格、换行和引号
+    let cleaned = content.trim().replace(/[\n\r]/g, '');
+    
+    // 检查是否已经包含方括号
+    if (!cleaned.startsWith('[')) {
+        // 按逗号或换行分割问题
+        let questions = cleaned.split(/[,，\n\r]+/).map(q => q.trim()).filter(q => q);
+        
+        // 为每个问题添加引号，并组成数组
+        questions = questions.map(q => {
+            // 移除已有的引号
+            q = q.replace(/^["']|["']$/g, '');
+            return `"${q}"`;
+        });
+        
+        cleaned = `[${questions.join(',')}]`;
+    }
+
+    // 验证格式化后的内容
+    try {
+        JSON.parse(cleaned);
+        return cleaned;
+    } catch (e) {
+        return null;
+    }
+}
+
+// 添加问题输入框
+function addQuestionInput() {
+    const container = document.getElementById('create-questions-container');
+    const questionDiv = document.createElement('div');
+    questionDiv.className = 'question-item';
+    questionDiv.innerHTML = `
+        <input type="text" class="question-input" placeholder="请输入问题">
+        <button type="button" onclick="removeQuestion(this)">删除</button>
+    `;
+    container.appendChild(questionDiv);
+}
+
+// 删除问题
+function removeQuestion(button) {
+    const questionItem = button.parentElement;
+    const container = questionItem.parentElement;
+    if (container.children.length > 1) {
+        container.removeChild(questionItem);
+    } else {
+        alert('至少需要保留一个问题');
+    }
+}
+
+// 修改创建问卷函数
+async function createOrUpdateQuestionnaire() {
+    const title = document.getElementById('title').value.trim();
+    const status = document.getElementById('status').value;
+    const deadline = document.getElementById('deadline').value;
+    const categoryId = parseInt(document.getElementById('category').value) || null;
+
+    // 收集所有问题
+    const questions = Array.from(document.querySelectorAll('#create-questions-container .question-input'))
+        .map(input => input.value.trim())
+        .filter(q => q);
+
+    // 表单验证
+    if (!title) {
+        alert('请输入标题');
+        return;
+    }
+
+    if (questions.length === 0) {
+        document.getElementById('content-error').textContent = '至少需要输入一个问题';
+        return;
+    }
+
+    // 构建请求数据
+    const requestData = {
+        title: title,
+        content: JSON.stringify(questions),
+        status: status || 'draft',
+        category_id: categoryId
+    };
+
+    if (deadline) {
+        requestData.deadline = new Date(deadline).toISOString();
+    }
+
+    try {
+        const response = await fetch(`${API_URL}/user/wenjuans`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(requestData)
+        });
+
+        const result = await response.json();
+        
+        if (response.ok) {
+            alert('创建成功');
+            resetForm('create-questionnaire');
+            showSection('questionnaire-list');
+            // 直接加载第一页，确保新创建的问卷显示在最前面
+            await loadQuestionnaires(1);
+        } else {
+            alert(result.message || '创建失败：' + (result.error || '未知错误'));
+        }
+    } catch (error) {
+        console.error('创建问卷错误:', error);
+        alert('网络错误或服务器异常');
+    }
+}
+
+// 修改搜索问卷函数
+async function searchWenjuans(page = 1) {
+    const searchTitle = document.getElementById('search-title').value.trim();
+    const tbody = document.querySelector('#wenjuan-search-table tbody');
+    
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align: center;">搜索中...</td></tr>';
+    
+    try {
+        // 构建查询URL
+        const url = new URL(`${API_URL}/user/wenjuans/search`);
+        url.searchParams.append('title', searchTitle);
+        url.searchParams.append('page', page.toString());
+        url.searchParams.append('pageSize', '10');
+
+        console.log('Search URL:', url.toString()); // 调试用
+        
+        const response = await fetch(url);
+        const result = await response.json();
+        
+        console.log('Search result:', result); // 调试用
+        
+        const data = result.data;
+        tbody.innerHTML = '';
+        
+        if (!data.list || data.list.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align: center;">未找到相关问卷</td></tr>';
+            return;
+        }
+        
+        // 渲染搜索结果
+        data.list.forEach(wenjuan => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${wenjuan.id}</td>
+                <td>${escapeHtml(wenjuan.title)}</td>
+                <td>${wenjuan.status}</td>
+                <td>${wenjuan.created_at}</td>
+                <td>
+                    <button onclick="showAnswerForm(${wenjuan.id})" 
+                            class="btn btn-primary">答题</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+        
+        // 更新分页信息
+        updateSearchPagination({
+            current_page: data.current_page,
+            total_pages: data.total_pages,
+            total: data.total,
+            has_more: data.has_more
+        });
+        
+    } catch (error) {
+        console.error('搜索失败:', error);
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: red;">
+            搜索失败: ${error.message}</td></tr>`;
+    }
+}
+
+// 修复 HTML 转义函数
+function escapeHtml(unsafe) {
+    if (!unsafe) return '';
+    return unsafe
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;") // 修复这里的语法错误
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
+// 更新搜索分页函数
+function updateSearchPagination(data) {
+    console.log('Updating pagination with:', data); // 调试用
+    
+    const pageInfo = document.getElementById('search-page-info');
+    const totalCount = document.getElementById('search-total-count');
+    const prevButton = document.getElementById('prev-search-page');
+    const nextButton = document.getElementById('next-search-page');
+    
+    if (pageInfo) pageInfo.textContent = `第${data.current_page}页/共${data.total_pages}页`;
+    if (totalCount) totalCount.textContent = data.total;
+    
+    if (prevButton) prevButton.disabled = data.current_page <= 1;
+    if (nextButton) nextButton.disabled = !data.has_more;
+    
+    // 更新全局变量
+    searchCurrentPage = data.current_page;
+    searchTotalPages = data.total_pages;
+}
+
+// 添加防抖搜索
+let searchTimeout = null;
+const searchInput = document.getElementById('search-title');
+if (searchInput) {
+    searchInput.addEventListener('input', () => {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => {
+            searchWenjuans(1);
+        }, 500);
+    });
+}
+
+// 修改 showAnswerForm 函数
+async function showAnswerForm(wenjuanId) {
+    try {
+        const response = await fetch(`${API_URL}/user/wenjuans/${wenjuanId}`);
+        if (!response.ok) {
+            throw new Error('获取问卷失败');
+        }
+
+        const wenjuan = await response.json();
+        
+        // 验证问卷状态
+        if (wenjuan.status !== 'published') {
+            alert('该问卷未发布，无法答题');
+            return;
+        }
+
+        // 验证截止日期
+        if (wenjuan.deadline && new Date(wenjuan.deadline) < new Date()) {
+            alert('该问卷已过期');
+            return;
+        }
+
+        // 存储当前问卷数据
+        currentWenjuanForAnswer = wenjuan;
+
+        // 确保答题区域可见
+        document.getElementById('answer-form').style.display = 'block';
+        
+        // 显示问卷信息
+        document.getElementById('wenjuan-info').innerHTML = `
+            <h4>${escapeHtml(wenjuan.title)}</h4>
+            <p>截止时间：${wenjuan.deadline ? new Date(wenjuan.deadline).toLocaleString() : '无'}</p>
+        `;
+
+        try {
+            // 解析并显示问题
+            const questions = JSON.parse(wenjuan.content);
+            const container = document.getElementById('questions-container');
+            container.innerHTML = questions.map((q, index) => `
+                <div class="form-group">
+                    <label>问题 ${index + 1}：${escapeHtml(q)}</label>
+                    <textarea 
+                        id="answer-${index}" 
+                        class="answer-input" 
+                        rows="3" 
+                        placeholder="请输入您的答案"
+                    ></textarea>
+                </div>
+            `).join('');
+
+            // 滚动到答题区域
+            document.getElementById('answer-form').scrollIntoView({ behavior: 'smooth' });
+        } catch (parseError) {
+            console.error('解析问题内容失败:', parseError);
+            alert('问卷格式错误');
+        }
+    } catch (error) {
+        console.error('加载问卷失败:', error);
+        alert(error.message || '加载问卷失败');
+    }
+}
+
+// 修改提交答案函数
+async function submitAnswers() {
+    if (!currentWenjuanForAnswer) {
+        alert('请先选择问卷');
+        return;
+    }
+
+    try {
+        const questions = JSON.parse(currentWenjuanForAnswer.content);
+        const answers = questions.map((_, index) => 
+            document.getElementById(`answer-${index}`).value.trim()
+        );
+
+        // 验证所有问题是否已答
+        if (answers.some(a => !a)) {
+            alert('请回答所有问题');
+            return;
+        }
+
+        const response = await fetch(`${API_URL}/user/wenjuans/${currentWenjuanForAnswer.id}/submit`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                answer: JSON.stringify(answers)
+            })
+        });
+
+        if (response.ok) {
+            alert('提交成功！');
+            // 重置表单
+            document.getElementById('answer-form').style.display = 'none';
+            document.getElementById('questions-container').innerHTML = '';
+            currentWenjuanForAnswer = null;
+        } else {
+            const error = await response.json();
+            alert(error.message || '提交失败');
+        }
+    } catch (error) {
+        console.error('提交答案失败:', error);
+        alert('提交失败');
+    }
+}
+
+// 提交答案
+async function submitAnswer() {
+    const qid = document.getElementById('answer-qid').value;
+    const answer = document.getElementById('answer-content').value;
+
+    try {
+        const response = await fetch(`${API_URL}/user/wenjuans/${qid}/submit`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({answer})
+        });
+        if(response.ok) {
+            alert('提交成功');
+            document.getElementById('answer-content').value = '';
+        } else {
+            const result = await response.json();
+            alert(result.message || '提交失败');
+        }
+    } catch (error) {
+        alert('网络错误');
+    }
+}
+
+// 下载PDF
+async function downloadPDF(id) {
+    try {
+        const response = await fetch(`${API_URL}/user/wenjuans/${id}/download`);
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `wenjuan_${id}.pdf`;
+        a.click();
+        URL.revokeObjectURL(url);
+    } catch (error) {
+        alert('下载失败');
+    }
+}
+
+// 加载分类列表到下拉框
+async function loadCategoriesSelect() {
+    try {
+        const response = await fetch(`${API_URL}/user/wenjuans/categories`);
+        const data = await response.json();
+        const select = document.getElementById('category');
+        select.innerHTML = '<option value="">无分类</option>';
+        data.data.list.forEach(cat => {
+            const opt = document.createElement('option');
+            opt.value = cat.id;
+            opt.textContent = cat.name;
+            select.appendChild(opt);
+        });
+    } catch (error) {
+        alert('加载分类失败');
+    }
+}
+
+// 分类管理功能
+async function loadCategories() {
+    try {
+        const response = await fetch(`${API_URL}/user/wenjuans/categories`);
+        const data = await response.json();
+        const listDiv = document.getElementById('category-list');
+        listDiv.innerHTML = '';
+        data.data.list.forEach(cat => {
+            const item = document.createElement('div');
+            item.className = 'category-item';
+            item.innerHTML = `
+                <strong>${cat.name}</strong>
+                <p>${cat.description}</p>
+                <div class="category-actions">
+                    <button onclick="showEditCategory(${cat.id}, '${cat.name}', '${cat.description}')">修改</button>
+                    <button onclick="deleteCategory(${cat.id})">删除</button>
+                </div>
+                <div id="edit-form-${cat.id}" class="edit-category-form">
+                    <div class="form-group">
+                        <label>分类名称</label>
+                        <input type="text" id="edit-name-${cat.id}" value="${cat.name}">
+                    </div>
+                    <div class="form-group">
+                        <label>描述</label>
+                        <textarea id="edit-desc-${cat.id}" rows="2">${cat.description}</textarea>
+                    </div>
+                    <button onclick="updateCategory(${cat.id})">保存</button>
+                    <button onclick="cancelEdit(${cat.id})">取消</button>
+                </div>
+            `;
+            listDiv.appendChild(item);
+        });
+    } catch (error) {
+        alert('加载分类失败');
+    }
+}
+
+// 显示编辑分类表单
+function showEditCategory(id, name, description) {
+    // 隐藏所有编辑表单
+    document.querySelectorAll('.edit-category-form').forEach(form => {
+        form.style.display = 'none';
+    });
+    
+    // 显示当前分类的编辑表单
+    const editForm = document.getElementById(`edit-form-${id}`);
+    if (editForm) {
+        editForm.style.display = 'block';
+        document.getElementById(`edit-name-${id}`).value = name;
+        document.getElementById(`edit-desc-${id}`).value = description;
+    }
+}
+
+// 取消编辑
+function cancelEdit(id) {
+    const editForm = document.getElementById(`edit-form-${id}`);
+    if (editForm) {
+        editForm.style.display = 'none';
+    }
+}
+
+// 更新分类
+async function updateCategory(id) {
+    const name = document.getElementById(`edit-name-${id}`).value.trim();
+    const description = document.getElementById(`edit-desc-${id}`).value.trim();
+    
+    if (!name) {
+        alert('分类名称不能为空');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_URL}/user/wenjuans/categories/${id}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                name: name,
+                description: description
+            })
+        });
+        
+        if (response.ok) {
+            alert('修改成功');
+            loadCategories(); // 重新加载分类列表
+        } else {
+            const result = await response.json();
+            alert(result.message || '修改失败');
+        }
+    } catch (error) {
+        console.error('更新分类失败:', error);
+        alert('修改失败');
+    }
+}
+
+// 删除分类
+async function deleteCategory(id) {
+    if(confirm('确定删除？')) {
+        try {
+            await fetch(`${API_URL}/user/wenjuans/categories/${id}`, {method: 'DELETE'});
+            loadCategories();
+        } catch (error) {
+            alert('删除失败');
+        }
+    }
+}
+
+// 表单重置
+function resetForm(sectionId) {
+    const form = document.getElementById(sectionId);
+    form.querySelectorAll('input[type="text"], textarea').forEach(el => el.value = '');
+    
+    // 重置问题列表
+    if (sectionId === 'create-questionnaire') {
+        const container = document.getElementById('create-questions-container');
+        container.innerHTML = `
+            <div class="question-item">
+                <input type="text" class="question-input" placeholder="请输入问题">
+            </div>
+        `;
+    }
+    
+    document.getElementById('content-error').textContent = '';
+}
+
+// 添加修改问卷函数
+async function editQuestionnaire(id) {
+    try {
+        const response = await fetch(`${API_URL}/user/wenjuans/${id}`);
+        const data = await response.json();
+        
+        const questions = JSON.parse(data.content);
+        const modalBody = document.getElementById('modal-body');
+        
+        modalBody.innerHTML = `
+            <div class="detail-container edit-mode" data-wenjuan-id="${id}">
+                <div class="edit-section">
+                    <div class="edit-section-title">基本信息</div>
+                    <div class="form-group">
+                        <label>标题：</label>
+                        <input type="text" id="edit-title" value="${data.title}">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>状态：</label>
+                        <select id="edit-status">
+                            <option value="draft" ${data.status === 'draft' ? 'selected' : ''}>草稿</option>
+                            <option value="published" ${data.status === 'published' ? 'selected' : ''}>已发布</option>
+                        </select>
+                    </div>
+                    
+                        <input type="datetime-local" id="edit-deadline" 
+                            value="${data.deadline ? new Date(data.deadline).toISOString().slice(0, 16) : ''}">
+                    </div>
+                </div>
+                
+                <div class="edit-section">
+                    <div class="edit-section-title">问题列表</div>
+                    <div id="questions-edit-container">
+                        ${questions.map((q, index) => `
+                            <div class="edit-question-item" id="question-item-${index}">
+                                <input type="text" value="${q}" id="question-${index}">
+                                <div class="edit-question-actions">
+                                    <button onclick="moveQuestion(${index}, 'up')" ${index === 0 ? 'disabled' : ''}>↑</button>
+                                    <button onclick="moveQuestion(${index}, 'down')" ${index === questions.length - 1 ? 'disabled' : ''}>↓</button>
+                                    <button onclick="deleteQuestion(${index})">删除</button>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <button onclick="addNewQuestion()">添加问题</button>
+                </div>
+                
+                ${data.answers && data.answers.length > 0 ? `
+                    <div class="edit-section">
+                        <div class="edit-section-title">答案列表</div>
+                        <div id="answers-edit-container">
+                            ${data.answers.map((answer, answerIndex) => {
+                                const answerContent = JSON.parse(answer.answer);
+                                return `
+                                    <div class="edit-answer-item" id="answer-item-${answer.id}">
+                                        ${questions.map((q, qIndex) => `
+                                            <div class="edit-answer-content">
+                                                <strong>问${qIndex + 1}：</strong>${q}<br>
+                                                <strong>答：</strong>
+                                                <input type="text" 
+                                                    id="answer-${answer.id}-${qIndex}" 
+                                                    value="${answerContent[qIndex] || ''}"
+                                                    onchange="updateAnswer(${answer.id}, ${qIndex})"
+                                                >
+                                            </div>
+                                        `).join('')}
+                                        <div class="answer-time">
+                                            提交时间：${new Date(answer.created_at).toLocaleString()}
+                                            <button onclick="deleteAnswer(${answer.id})">删除答案</button>
+                                        </div>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    </div>
+                ` : ''}
+                
+                <div class="edit-buttons">
+                    <button onclick="closeModal()">取消</button>
+                    <button onclick="saveQuestionnaireChanges(${id})">保存所有修改</button>
+                </div>
+            </div>
+        `;
+        
+        document.getElementById('modal').style.display = 'block';
+    } catch (error) {
+        console.error('加载问卷失败:', error);
+        alert('加载失败');
+    }
+}
+
+// 添加新问题
+function addNewQuestion() {
+    const container = document.getElementById('questions-edit-container');
+    const questionCount = container.children.length;
+    const newQuestionDiv = document.createElement('div');
+    newQuestionDiv.className = 'edit-question-item';
+    newQuestionDiv.id = `question-item-${questionCount}`;
+    newQuestionDiv.innerHTML = `
+        <input type="text" id="question-${questionCount}" placeholder="请输入新问题">
+        <div class="edit-question-actions">
+            <button onclick="moveQuestion(${questionCount}, 'up')" ${questionCount === 0 ? 'disabled' : ''}>↑</button>
+            <button onclick="moveQuestion(${questionCount}, 'down')" disabled>↓</button>
+            <button onclick="deleteQuestion(${questionCount})">删除</button>
+        </div>
+    `;
+    container.appendChild(newQuestionDiv);
+    updateQuestionButtons();
+}
+
+// 移动问题位置
+function moveQuestion(index, direction) {
+    const container = document.getElementById('questions-edit-container');
+    const items = container.children;
+    const item = items[index];
+    
+    if (direction === 'up' && index > 0) {
+        container.insertBefore(item, items[index - 1]);
+    } else if (direction === 'down' && index < items.length - 1) {
+        container.insertBefore(items[index + 1], item);
+    }
+    
+    updateQuestionButtons();
+}
+
+// 删除问题
+function deleteQuestion(index) {
+    if (!confirm('确定要删除这个问题吗？')) return;
+    
+    const container = document.getElementById('questions-edit-container');
+    container.removeChild(container.children[index]);
+    updateQuestionButtons();
+}
+
+// 更新问题按钮状态
+function updateQuestionButtons() {
+    const container = document.getElementById('questions-edit-container');
+    const items = container.children;
+    
+    for (let i = 0; i < items.length; i++) {
+        const upBtn = items[i].querySelector('button:nth-child(1)');
+        const downBtn = items[i].querySelector('button:nth-child(2)');
+        
+        upBtn.disabled = i === 0;
+        downBtn.disabled = i === items.length - 1;
+    }
+}
+
+// 修改删除答案函数
+async function deleteAnswer(answerId) {
+    if (!confirm('确定要删除这个答案吗？')) return;
+    
+    try {
+        // 修改删除答案的API路径，使用正确的问卷ID和答案ID
+        const wenjuanId = document.querySelector('.edit-section-title').closest('.detail-container').dataset.wenjuanId;
+        const response = await fetch(`${API_URL}/user/wenjuans/${wenjuanId}/answers/${answerId}`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        if (response.ok) {
+            const element = document.getElementById(`answer-item-${answerId}`);
+            if (element) {
+                element.remove();
+                alert('删除成功');
+            }
+        } else {
+            const error = await response.json();
+            alert(error.message || '删除失败');
+        }
+    } catch (error) {
+        console.error('删除答案失败:', error);
+        alert('删除失败：' + error.message);
+    }
+}
+
+// 修改答案更新函数
+async function updateAnswer(answerId, questionIndex) {
+    try {
+        const input = document.getElementById(`answer-${answerId}-${questionIndex}`);
+        const newValue = input.value.trim();
+        
+        // 获取问卷ID
+        const wenjuanId = document.querySelector('.detail-container').dataset.wenjuanId;
+        
+        // 先获取当前完整答案
+        const response = await fetch(`${API_URL}/user/wenjuans/${wenjuanId}/answers/${answerId}`);
+        if (!response.ok) {
+            throw new Error('获取答案数据失败');
+        }
+        
+        const answerData = await response.json();
+        let answers = [];
+        try {
+            answers = JSON.parse(answerData.Answer);
+        } catch {
+            answers = JSON.parse(answerData.answer); // 兼容小写的 answer 字段
+        }
+        
+        // 更新当前问题的答案
+        answers[questionIndex] = newValue;
+        
+        // 发送更新请求
+        const updateResponse = await fetch(`${API_URL}/user/wenjuans/${wenjuanId}/answers/${answerId}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                answer: JSON.stringify(answers)
+            })
+        });
+
+        if (!updateResponse.ok) {
+            throw new Error('更新答案失败');
+        }
+
+        // 显示成功提示
+        showNotification('答案更新成功');
+        
+        // 重新加载问卷详情以显示更新后的数据
+        await showQuestionnaire(wenjuanId);
+        
+    } catch (error) {
+        console.error('更新答案失败:', error);
+        showNotification('更新答案失败: ' + error.message, 'error');
+    }
+}
+
+// 修改保存问卷更改函数
+async function saveQuestionnaireChanges(id) {
+    try {
+        const title = document.getElementById('edit-title').value.trim();
+        const status = document.getElementById('edit-status').value;
+        const deadline = document.getElementById('edit-deadline').value;
+        
+        // 收集所有问题
+        const container = document.getElementById('questions-edit-container');
+        const questions = Array.from(container.children).map(item => {
+            const input = item.querySelector('input');
+            return input.value.trim();
+        }).filter(q => q);
+        
+        if (!title) {
+            alert('标题不能为空');
+            return;
+        }
+        
+        if (questions.length === 0) {
+            alert('至少需要一个问题');
+            return;
+        }
+        
+        const requestData = {
+            title: title,
+            content: JSON.stringify(questions),
+            status: status
+        };
+        
+        if (deadline) {
+            requestData.deadline = new Date(deadline).toISOString();
+        }
+        
+        const response = await fetch(`${API_URL}/user/wenjuans/${id}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(requestData)
+        });
+        
+        if (response.ok) {
+            alert('保存成功');
+            closeModal();
+            loadQuestionnaires(currentPage);
+        } else {
+            const error = await response.json();
+            alert(error.message || '保存失败');
+        }
+    } catch (error) {
+        console.error('保存修改失败:', error);
+        alert('保存失败');
+    }
+}
+
+// 添加返回函数
+function goBack() {
+    window.location.href = 'http://localhost:8080/admin';
+}
+
+// 删除问卷
+async function deleteQuestionnaire(id) {
+    if (!confirm('确定要删除该问卷吗？')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_URL}/user/wenjuans/${id}`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        if (response.ok) {
+            alert('删除成功');
+            // 重新加载当前页的问卷列表
+            loadQuestionnaires(currentPage);
+        } else {
+            const error = await response.json();
+            alert(error.message || '删除失败');
+        }
+    } catch (error) {
+        console.error('删除问卷失败:', error);
+        alert('删除失败');
+    }
+}
+
+// 添加页面跳转函数
+function jumpToPage() {
+    const input = document.getElementById('jump-page-input');
+    const pageNum = parseInt(input.value);
+    
+    if (isNaN(pageNum) || pageNum < 1) {
+        alert('请输入有效的页码');
+        return;
+    }
+    
+    if (pageNum > totalPages) {
+        alert(`最大页数为${totalPages}`);
+        return;
+    }
+    
+    loadQuestionnaires(pageNum);
+    input.value = ''; // 清空输入框
+}
+
+// 添加创建表格行的辅助函数
+function appendQuestionnaireRow(q, tbody) {
+    const tr = document.createElement('tr');
+    tr.setAttribute('data-id', q.id);
+    tr.setAttribute('data-created', q.created_at);
+    tr.setAttribute('data-pinned', q.is_pinned);
+    
+    if (q.is_pinned) {
+        tr.className = 'pinned-row';
+    }
+    
+    tr.innerHTML = `
+        <td>${q.id}</td>
+        <td class="title-cell" onclick="showQuestionnaire(${q.id})">${q.title}</td>
+        <td>${q.status}</td>
+        <td>${q.deadline || '无'}</td>
+        <td>
+            <button class="pin-button ${q.is_pinned ? 'pinned' : ''}" 
+                    onclick="togglePin(${q.id}, ${!q.is_pinned}, this)">
+                ${q.is_pinned ? '❤️ 已置顶' : '🤍 置顶'}
+            </button>
+            <button onclick="editQuestionnaire(${q.id})">修改</button>
+            <button onclick="deleteQuestionnaire(${q.id})">删除</button>
+            <button onclick="downloadPDF(${q.id})">下载</button>
+        </td>
+    `;
+
+    // 根据置顶状态和创建时间确定插入位置
+    const rows = Array.from(tbody.children);
+    
+    if (q.is_pinned) {
+        // 找到最后一个置顶问卷的位置
+        const lastPinnedIndex = rows.findIndex(row => !row.classList.contains('pinned-row'));
+        if (lastPinnedIndex === -1) {
+            tbody.appendChild(tr);
+        } else {
+            tbody.insertBefore(tr, rows[lastPinnedIndex]);
+        }
+    } else {
+        // 找到合适的非置顶位置（按创建时间降序）
+        const insertIndex = rows.findIndex(row => {
+            if (row.classList.contains('pinned-row')) return false;
+            return new Date(row.getAttribute('data-created')) < new Date(q.created_at);
+        });
+        
+        if (insertIndex === -1) {
+            tbody.appendChild(tr);
+        } else {
+            tbody.insertBefore(tr, rows[insertIndex]);
+        }
+    }
+}
+
+// 修改置顶/取消置顶功能
+async function togglePin(id, shouldPin, button) {
+    try {
+        const endpoint = shouldPin ? 'pin' : 'unpin';
+        const response = await fetch(`${API_URL}/user/wenjuans/${id}/${endpoint}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.message || '操作失败');
+        }
+
+        // 更新按钮状态和行的样式
+        const row = button.closest('tr');
+        
+        if (shouldPin) {
+            button.textContent = '❤️ 已置顶';
+            button.classList.add('pinned');
+            button.onclick = () => togglePin(id, false, button);
+            row.classList.add('pinned-row');
+            
+            // 移动到置顶区域
+            const tbody = row.parentNode;
+            const firstNonPinned = Array.from(tbody.children).find(r => !r.classList.contains('pinned-row'));
+            if (firstNonPinned) {
+                tbody.insertBefore(row, firstNonPinned);
+            }
+        } else {
+            button.textContent = '🤍 置顶';
+            button.classList.remove('pinned');
+            button.onclick = () => togglePin(id, true, button);
+            row.classList.remove('pinned-row');
+            
+            // 根据创建时间重新排序
+            const tbody = row.parentNode;
+            const createdAt = row.getAttribute('data-created');
+            const insertIndex = Array.from(tbody.children)
+                .filter(r => !r.classList.contains('pinned-row'))
+                .findIndex(r => new Date(r.getAttribute('data-created')) < new Date(createdAt));
+            
+            if (insertIndex !== -1) {
+                const referenceRow = tbody.children[insertIndex];
+                tbody.insertBefore(row, referenceRow);
+            } else {
+                tbody.appendChild(row);
+            }
+        }
+
+        // 显示操作提示
+        showNotification(shouldPin ? '已置顶到列表最前面' : '已取消置顶');
+        
+        // 更新按钮的事件处理程序
+        button.setAttribute('onclick', `togglePin(${id}, ${!shouldPin}, this)`);
+        
+    } catch (error) {
+        console.error('置顶操作失败:', error);
+        alert(error.message || '操作失败');
+    }
+}
+
+// 添加提示消息函数
+function showNotification(message) {
+    const notification = document.createElement('div');
+    notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 10px 20px;
+        background: #409EFF;
+        color: white;
+        border-radius: 4px;
+        z-index: 1000;
+        transition: opacity 0.3s;
+    `;
+    notification.textContent = message;
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+        notification.style.opacity = '0';
+        setTimeout(() => notification.remove(), 300);
+    }, 2000);
+}
+
+// 修改创建分类函数
+async function createCategory() {
+    const nameInput = document.getElementById('category-name');
+    const descInput = document.getElementById('category-desc');
+    const name = nameInput.value.trim();
+    const description = descInput.value.trim();
+
+    if (!name) {
+        showNotification('分类名称不能为空', 'error');
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_URL}/user/wenjuans/categories`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                name: name,
+                description: description || ''  // 确保description不为null
+            })
+        });
+
+        const result = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(result.message || '创建分类失败');
+        }
+
+        showNotification('创建分类成功', 'success');
+        nameInput.value = '';
+        descInput.value = '';
+        await loadCategories();    // 重新加载分类列表
+        await loadCategoriesSelect(); // 重新加载分类下拉框
+    } catch (error) {
+        console.error('创建分类失败:', error);
+        showNotification(error.message, 'error');
+    }
+}
+
+// 初始化时加载问卷列表
+document.addEventListener('DOMContentLoaded', () => {
+    showSection('questionnaire-list');
+    loadCategoriesSelect();
+});
+</script>
+</body>
+</html>

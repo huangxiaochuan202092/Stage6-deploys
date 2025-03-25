@@ -19,10 +19,13 @@ func InitRouter() *gin.Engine {
 	// 初始化Redis连接
 	utils.InitRedis()
 
-	// 设置模板目录
-	templatePath := "../resful/templates/*"
+	// 修改模板路径设置
+	templatePath := "./templates/*" // 修改这里
 	fmt.Printf("Template path: %s\n", templatePath)
 	r.LoadHTMLGlob(templatePath)
+
+	// 添加静态文件服务
+	r.Static("/static", "./static")
 
 	// 设置主页路由
 	r.GET("/", func(c *gin.Context) {
@@ -53,6 +56,14 @@ func InitRouter() *gin.Engine {
 	r.GET("/blog_manager", func(c *gin.Context) {
 		fmt.Println("访问博客管理页面")
 		c.HTML(http.StatusOK, "blog.html", nil)
+	})
+
+	// 问卷管理页面
+	r.GET("/wenjuan_manager", func(c *gin.Context) {
+		fmt.Println("访问问卷管理页面")
+		c.HTML(http.StatusOK, "wenda.html", gin.H{
+			"title": "问卷管理系统",
+		})
 	})
 
 	// API 路由组
@@ -115,13 +126,42 @@ func InitRouter() *gin.Engine {
 		// 取消点赞博客
 		userGroup.POST("/blog/:id/dislike", handlers.DislikeBlog)
 
-		// 问卷管理路由
-		userGroup.POST("/wenjuans", handlers.CreateWenjuan)
-		userGroup.GET("/wenjuans", handlers.GetAllWenjuans)
-		userGroup.GET("/wenjuans/:id", handlers.GetWenjuanById)
-		userGroup.PUT("/wenjuans/:id", handlers.UpdateWenjuan)
-		userGroup.DELETE("/wenjuans/:id", handlers.DeleteWenjuan)
-		userGroup.POST("/wenjuans/:id/submit", handlers.SubmitWenjuanAnswer)
+		// 问卷管理路由组
+		wenjuanGroup := userGroup.Group("/wenjuans")
+		{
+			// 把搜索路由放在最前面，避免被其他路由匹配
+			wenjuanGroup.GET("/search", handlers.SearchWenjuanByTitle)
+
+			wenjuanGroup.POST("", handlers.CreateWenjuan)
+			wenjuanGroup.GET("", handlers.GetAllWenjuans)
+			wenjuanGroup.GET("/:id", handlers.GetWenjuanById)
+			wenjuanGroup.PUT("/:id", handlers.UpdateWenjuan)
+			wenjuanGroup.DELETE("/:id", handlers.DeleteWenjuan)
+			//根据标题搜索问卷
+
+			// 置顶问卷
+			wenjuanGroup.POST("/:id/pin", handlers.PinWenjuan)
+			// 取消置顶问卷
+			wenjuanGroup.POST("/:id/unpin", handlers.UnpinWenjuan)
+
+			// 答案管理
+			wenjuanGroup.POST("/:id/submit", handlers.SubmitWenjuanAnswer)
+			wenjuanGroup.PUT("/:id/answers/:answerId", handlers.UpdateWenjuanAnswer)
+			wenjuanGroup.DELETE("/:id/answers/:answerId", handlers.DeleteWenjuanAnswer)
+			wenjuanGroup.GET("/:id/answers/:answerId", handlers.GetWenjuanAnswer)
+
+			// PDF下载
+			wenjuanGroup.GET("/:id/download", handlers.DownloadWenjuanAndAnswers)
+
+			// 分类管理
+			wenjuanGroup.GET("/categories", handlers.GetAllCategories)
+			wenjuanGroup.POST("/categories", handlers.CreateCategory)
+			wenjuanGroup.PUT("/categories/:id", handlers.UpdateCategory)
+			wenjuanGroup.DELETE("/categories/:id", handlers.DeleteCategory)
+
+			// 问卷分类关联
+			wenjuanGroup.POST("/:id/categories/:categoryId", handlers.AddCategoryToWenjuan)
+		}
 	}
 
 	return r
