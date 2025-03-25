@@ -41,7 +41,7 @@ go run main.go
 - 【第2期】go快速上手web应用项目用户管理模块
 - 【第3期】go快速上手web应用项目任务管理模块
 - 【第4期】go快速上手web应用项目博客管理模块
-- 【第5期】go快速上手web应用项目问卷管理模块
+- 【第5期】go快速上手web应用项目问答管理模块
 
 ## 英文版本
 # Project Introduction
