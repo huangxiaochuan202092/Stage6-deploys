@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh">
+<html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <title>用户管理</title>
@@ -99,6 +99,35 @@
         .btn-delete:hover {
             background: #c82333;
         }
+        .modal {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            z-index: 1000;
+        }
+        .modal-content {
+            max-width: 500px;
+            margin: 0 auto;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+        }
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
     </style>
 </head>
 <body>
@@ -117,6 +146,7 @@
                 <tr>
                     <th>ID</th>
                     <th>邮箱</th>
+                    <th>角色</th>
                     <th>操作</th>
                 </tr>
             </thead>
@@ -126,152 +156,256 @@
         </table>
     </div>
 
+    <div id="editUserModal" class="modal">
+        <div class="modal-content">
+            <h2>编辑用户</h2>
+            <form id="editUserForm">
+                <!-- 邮箱输入框 -->
+                <div class="form-group">
+                    <label for="editEmail">邮箱:</label>
+                    <input type="email" id="editEmail" name="email" required>
+                </div>
+                
+                <!-- 角色选择 -->
+                <div class="form-group">
+                    <label for="editRole">角色:</label>
+                    <select id="editRole" name="role">
+                        <option value="user">普通用户</option>
+                        <option value="admin">管理员</option>
+                    </select>
+                </div>
+                
+                <button type="submit">保存</button>
+                <button type="button" onclick="closeEditModal()">取消</button>
+            </form>
+        </div>
+    </div>
+
     <script>
-        // 页面加载完成后自动加载用户列表
+        // 添加授权请求函数
+        async function fetchWithAuth(url, options = {}) {
+            const token = localStorage.getItem('authToken');
+            if (!token) {
+                alert('您未登录或登录已过期');
+                window.location.href = '/';
+                return null;
+            }
+
+            options.headers = {
+                ...options.headers,
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            };
+
+            try {
+                const response = await fetch(url, options);
+                if (response.status === 401) {
+                    console.error('认证失败，状态码:', response.status);
+                    try {
+                        const data = await response.json();
+                        if (data.code === "invalid_signature") {
+                            console.error('令牌签名无效，准备重新登录');
+                            localStorage.removeItem('authToken');
+                            localStorage.removeItem('userInfo');
+                            alert('您的登录信息已过期或无效，需要重新登录');
+                            window.location.href = '/';
+                            return null;
+                        }
+                    } catch (e) {
+                        console.error('无法解析响应:', e);
+                    }
+                    
+                    alert('访问未授权，请确认您有管理员权限');
+                    window.location.href = '/admin';
+                    return null;
+                } else if (response.status === 500) {
+                    console.error('服务器错误，状态码:', response.status);
+                    const errorText = await response.text();
+                    alert('服务器内部错误: ' + errorText);
+                    return null;
+                }
+                return response;
+            } catch (error) {
+                console.error('请求失败:', error);
+                alert('网络请求失败: ' + error.message);
+                return null;
+            }
+        }
+
+        // 检查令牌是否有效
+        async function checkTokenValidity() {
+            const token = localStorage.getItem('authToken');
+            if (!token) {
+                console.log('未找到认证令牌');
+                return false;
+            }
+
+            try {
+                console.log('验证令牌有效性...');
+                const response = await fetch('/user/validate-token', {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (response.status === 401) {
+                    console.log('令牌无效，需要重新登录');
+                    return false;
+                }
+                
+                const data = await response.json();
+                console.log('令牌验证结果:', data);
+                return data.valid === true;
+                
+            } catch (error) {
+                console.error('验证令牌失败:', error);
+                return false;
+            }
+        }
+
+        // 页面加载时检查用户权限和令牌
         document.addEventListener('DOMContentLoaded', function() {
-            console.log('页面加载完成，开始获取用户列表');
+            console.log('初始化用户管理页面...');
+            
+            // 确保令牌存在
+            const token = localStorage.getItem('authToken');
+            if (!token) {
+                // 尝试从sessionStorage恢复
+                const sessionToken = sessionStorage.getItem('authToken');
+                if (sessionToken) {
+                    console.log('从sessionStorage恢复令牌');
+                    localStorage.setItem('authToken', sessionToken);
+                } else {
+                    console.error('未找到认证令牌');
+                    // 为了调试目的，打印所有localStorage键
+                    console.log('localStorage内容:', Object.keys(localStorage));
+                    alert('未找到登录信息，请先登录系统');
+                    window.location.href = '/';
+                    return;
+                }
+            }
+            
+            // 检查用户角色
+            const userInfo = JSON.parse(localStorage.getItem('userInfo') || '{}');
+            console.log('当前用户信息:', userInfo);
+            
+            if (userInfo.role !== 'admin') {
+                alert('需要管理员权限');
+                window.location.href = '/admin';
+                return;
+            }
+            
+            // 加载用户列表
             loadUsers();
         });
 
-        // 加载用户列表
-        function loadUsers() {
-            console.log('开始加载用户列表...');
-            const tbody = document.getElementById('userTableBody');
-            tbody.innerHTML = '<tr><td colspan="3" style="text-align: center;">加载中...</td></tr>';
-
-            fetch('/user/')
-                .then(response => {
-                    console.log('响应状态:', response.status);
-                    return response.json();
-                })
-                .then(data => {
-                    console.log('收到的数据:', data);
-                    // 确保数据是数组格式
-                    const users = Array.isArray(data) ? data : (data.data || data.users || []);
-                    console.log('处理后的用户数据:', users);
-
-                    if (!users || users.length === 0) {
-                        tbody.innerHTML = '<tr><td colspan="3" style="text-align: center;">暂无用户数据</td></tr>';
-                        return;
+        // 修改加载用户列表函数，增加更多错误处理
+        async function loadUsers() {
+            try {
+                console.log('开始加载用户列表...');
+                
+                // 检查令牌
+                const token = localStorage.getItem('authToken');
+                if (!token) {
+                    console.error('未找到认证令牌');
+                    // 尝试从sessionStorage获取
+                    const sessionToken = sessionStorage.getItem('authToken');
+                    if (sessionToken) {
+                        console.log('从sessionStorage获取到令牌，正在恢复...');
+                        localStorage.setItem('authToken', sessionToken);
+                    } else {
+                        throw new Error('未找到认证令牌');
                     }
-
-                    // 生成表格内容
-                    tbody.innerHTML = users.map(user => `
-                        <tr>
-                            <td>${user.ID || user.id}</td>
-                            <td>${user.Email || user.email}</td>
-                            <td>
-                                <button onclick="viewUser('${user.ID || user.id}')" class="btn-view">查看</button>
-                                <button onclick="editUser('${user.ID || user.id}')" class="btn-edit">编辑</button>
-                                <button onclick="deleteUser('${user.ID || user.id}')" class="btn-delete">删除</button>
-                            </td>
-                        </tr>
-                    `).join('');
-                })
-                .catch(error => {
-                    console.error('加载失败:', error);
-                    tbody.innerHTML = `
-                        <tr>
-                            <td colspan="3" style="text-align: center;">
-                                加载失败，请刷新重试<br>
-                                <button onclick="loadUsers()" style="margin-top: 10px;">重新加载</button>
-                            </td>
-                        </tr>
-                    `;
-                });
-        }
-
-        // 查看用户
-        function viewUser(id) {
-            console.log('查看用户:', id);
-            fetch(`/user/${id}`)
-                .then(response => response.json())
-                .then(data => {
-                    console.log('用户详情:', data);
-                    const user = data.user || data;
-                    alert(`用户信息：\nID: ${user.ID || user.id}\n邮箱: ${user.Email || user.email}`);
-                })
-                .catch(error => {
-                    console.error('查看失败:', error);
-                    alert('获取用户信息失败');
-                });
-        }
-
-        // 编辑用户
-        function editUser(id) {
-            // 使用更可靠的方式获取当前行
-            const rows = document.querySelectorAll('#userTableBody tr');
-            let currentRow;
-            for (let row of rows) {
-                if (row.cells[0].textContent == id) {
-                    currentRow = row;
-                    break;
                 }
-            }
-            
-            if (!currentRow) {
-                console.error('找不到对应的行:', id);
-                return;
-            }
-
-            const currentEmail = currentRow.cells[1].textContent;
-            console.log('当前邮箱:', currentEmail);
-            
-            const newEmail = prompt('请输入新的邮箱地址：', currentEmail);
-            
-            if (!newEmail || newEmail === currentEmail) {
-                return;
-            }
-
-            console.log('发送更新请求:', id, newEmail);
-
-            fetch(`/user/${id}`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    email: newEmail
-                })
-            })
-            .then(response => {
-                console.log('收到响应:', response);
+                
+                // 检查用户信息和权限
+                const userInfo = JSON.parse(localStorage.getItem('userInfo') || '{}');
+                if (userInfo.role !== 'admin') {
+                    console.error('非管理员用户尝试访问用户列表');
+                    alert('需要管理员权限才能查看用户列表');
+                    window.location.href = '/admin';
+                    return;
+                }
+                
+                console.log('用户信息:', userInfo);
+                console.log('发送请求获取用户列表...');
+                const response = await fetch('/user/', {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+                        'Accept': 'application/json'
+                    }
+                });
+                
+                console.log('响应状态:', response.status);
+                
                 if (!response.ok) {
-                    return response.text().then(text => {
-                        throw new Error(text || '修改失败');
-                    });
+                    const errorText = await response.text();
+                    console.error('服务器错误响应:', errorText);
+                    throw new Error(`加载用户列表失败: HTTP ${response.status} - ${errorText || '未知错误'}`);
                 }
-                return response.json();
-            })
-            .then(data => {
-                console.log('更新成功:', data);
-                alert('修改成功！');
-                currentRow.cells[1].textContent = newEmail;
-            })
-            .catch(error => {
-                console.error('编辑用户失败:', error);
-                alert('修改失败：' + (error.message || '请重试'));
-            });
+
+                const data = await response.json();
+                console.log('获取到的用户数据:', data);
+                
+                const tbody = document.getElementById('userTableBody');
+                tbody.innerHTML = '';
+
+                const users = data.users || [];
+
+                if (users.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4" style="text-align: center;">暂无用户数据</td></tr>';
+                    return;
+                }
+
+                users.forEach(user => {
+                    console.log('处理用户数据:', user);
+                    const email = user.email || '无邮箱';
+                    const role = user.role || 'user';
+                    
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${user.id || ''}</td>
+                        <td>${email}</td>
+                        <td>
+                            <select id="role-${user.id}">
+                                <option value="user" ${role === 'user' ? 'selected' : ''}>普通用户</option>
+                                <option value="admin" ${role === 'admin' ? 'selected' : ''}>管理员</option>
+                            </select>
+                        </td>
+                        <td>
+                            <button class="btn btn-edit" onclick="openEditModal(${user.id}, '${email.replace(/'/g, "\\'")}', '${role}')">编辑</button>
+                            <button class="btn btn-delete" onclick="deleteUser(${user.id})">删除</button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            } catch (error) {
+                console.error('加载用户列表失败:', error);
+                alert('加载用户列表失败：' + error.message);
+            }
         }
 
         // 删除用户
-        function deleteUser(id) {
-            console.log('删除用户:', id);
+        async function deleteUser(id) {
             if (!confirm('确定要删除此用户吗？')) return;
 
-            fetch(`/user/${id}`, {
-                method: 'DELETE'
-            })
-            .then(response => response.json())
-            .then(data => {
-                console.log('删除成功:', data);
+            try {
+                const response = await fetchWithAuth(`/user/${id}`, {
+                    method: 'DELETE'
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.message || '删除失败');
+                }
+
                 alert('删除成功');
-                loadUsers(); // 重新加载列表
-            })
-            .catch(error => {
-                console.error('删除失败:', error);
-                alert('删除失败，请重试');
-            });
+                loadUsers();
+            } catch (error) {
+                alert(error.message || '删除失败，请重试');
+            }
         }
 
         // 搜索用户
@@ -280,8 +414,11 @@
             const rows = document.getElementById('userTableBody').getElementsByTagName('tr');
             
             Array.from(rows).forEach(row => {
-                const email = row.cells[1].textContent.toLowerCase();
-                row.style.display = email.includes(searchTerm) ? '' : 'none';
+                const emailCell = row.cells[1];
+                if (emailCell) {
+                    const email = emailCell.textContent.toLowerCase();
+                    row.style.display = email.includes(searchTerm) ? '' : 'none';
+                }
             });
         }
 
@@ -289,6 +426,63 @@
         function resetSearch() {
             document.getElementById('searchInput').value = '';
             loadUsers();
+        }
+
+        // 打开编辑模态框
+        function openEditModal(userId, userEmail, userRole) {
+            const modal = document.getElementById('editUserModal');
+            document.getElementById('editEmail').value = userEmail;
+            document.getElementById('editRole').value = userRole;
+            modal.dataset.userId = userId;
+            modal.style.display = 'block';
+        }
+
+        // 更新用户
+        async function updateUser(userId) {
+            const email = document.getElementById('editEmail').value.trim();
+            const role = document.getElementById('editRole').value;
+            
+            if (!email) {
+                alert('邮箱不能为空');
+                return;
+            }
+
+            try {
+                const response = await fetchWithAuth(`/user/${userId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        email: email,
+                        role: role
+                    })
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.message || '更新失败');
+                }
+
+                closeEditModal();
+                alert('更新成功');
+                await loadUsers();
+            } catch (error) {
+                alert(error.message || '更新失败，请重试');
+            }
+        }
+
+        // 表单提交处理
+        document.getElementById('editUserForm').onsubmit = async function(e) {
+            e.preventDefault();
+            const userId = this.closest('.modal').dataset.userId;
+            await updateUser(userId);
+        };
+
+        // 关闭编辑模态框
+        function closeEditModal() {
+            const modal = document.getElementById('editUserModal');
+            modal.style.display = 'none';
         }
     </script>
 </body>

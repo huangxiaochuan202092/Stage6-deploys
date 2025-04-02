@@ -6,11 +6,22 @@ import (
 	"gorm.io/gorm"
 )
 
+// Task 任务模型
 type Task struct {
-	gorm.Model            // 包含 ID, CreatedAt, UpdatedAt, DeletedAt
-	Title       string    `gorm:"not null" json:"title"`
-	Description string    `json:"description"`
-	Priority    string    `gorm:"default:medium" json:"priority"` // low, medium, high
-	Status      string    `gorm:"default:todo" json:"status"`     // todo, in_progress, done
-	DueDate     time.Time `json:"due_date"`
+	ID          uint           `json:"id" gorm:"primarykey"`
+	Title       string         `json:"title" gorm:"size:100;not null"`
+	Description string         `json:"description" gorm:"type:text"`
+	Priority    string         `json:"priority" gorm:"default:medium"` // high, medium, low
+	Status      string         `json:"status" gorm:"default:pending"`  // pending, in_progress, completed
+	Deadline    *time.Time     `json:"deadline"`
+	CreatorID   uint           `json:"creator_id"`
+	UserEmail   string         `json:"user_email" gorm:"not null"` // 添加用户邮箱字段
+	CreatedAt   time.Time      `json:"created_at"`
+	UpdatedAt   time.Time      `json:"updated_at"`
+	DeletedAt   gorm.DeletedAt `json:"-" gorm:"index"`
+}
+
+// TableName 指定表名
+func (Task) TableName() string {
+	return "tasks"
 }

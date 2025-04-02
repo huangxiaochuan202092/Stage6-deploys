@@ -123,6 +123,35 @@
             gap: 10px;
             justify-content: flex-end;
         }
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-top: 20px;
+            gap: 10px;
+        }
+        
+        .pagination button {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            background: white;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        
+        .pagination button.active {
+            background: #007bff;
+            color: white;
+            border-color: #007bff;
+        }
+        
+        .pagination button:hover:not(.active) {
+            background: #f8f9fa;
+        }
+        
+        .page-info {
+            margin: 0 15px;
+        }
     </style>
 </head>
 <body>
@@ -156,6 +185,10 @@
             </tbody>
         </table>
 
+        <div class="pagination" id="pagination">
+            <!-- 分页按钮将通过 JavaScript 动态生成 -->
+        </div>
+
         <!-- 新建/编辑任务的模态框 -->
         <div id="taskModal" class="modal" style="display: none;">
             <div class="modal-content">
@@ -173,14 +206,22 @@
                     <div class="form-group">
                         <label for="priority">优先级：</label>
                         <select id="priority" name="priority">
-                            <option value="高">高</option>
-                            <option value="中">中</option>
-                            <option value="低">低</option>
+                            <option value="high">高</option>
+                            <option value="medium">中</option>
+                            <option value="low">低</option>
                         </select>
                     </div>
                     <div class="form-group">
                         <label for="dueDate">截止日期：</label>
                         <input type="date" id="dueDate" name="dueDate" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="status">状态：</label>
+                        <select id="status" name="status">
+                            <option value="pending">待处理</option>
+                            <option value="in_progress">进行中</option>
+                            <option value="completed">已完成</option>
+                        </select>
                     </div>
                     <div class="form-buttons">
                         <button type="submit" class="btn-primary">保存</button>
@@ -192,137 +233,259 @@
     </div>
 
     <script>
-    // 页面加载完成后自动加载任务列表
-    document.addEventListener('DOMContentLoaded', function() {
-        console.log('页面加载完成，开始获取任务列表');
-        loadTasks();
-    });
+        // 页面加载完成后自动加载任务列表
+        document.addEventListener('DOMContentLoaded', function() {
+            const form = document.getElementById('taskForm');
+            
+            form.addEventListener('submit', function(e) {
+                e.preventDefault();
+                console.log('Form action:', this.dataset.action);
+                
+                if (this.dataset.action === 'edit') {
+                    updateTask(this.dataset.taskId);
+                } else {
+                    createTask();
+                }
+            });
 
-    // 辅助函数：将日期转换为ISO 8601格式并添加时间部分
-    function formatDateToISO(dateString) {
-        const date = new Date(dateString);
-        // 设置固定时间为 18:00:00
-        date.setHours(18, 0, 0, 0);
-        return date.toISOString();
-    }
+            // 初始化其他事件
+            document.querySelector('.close').addEventListener('click', closeTaskModal);
+            window.addEventListener('click', function(event) {
+                if (event.target == document.getElementById('taskModal')) {
+                    closeTaskModal();
+                }
+            });
 
-    // 辅助函数：从ISO时间格式中提取日期部分
-    function extractDateFromISO(isoString) {
-        return isoString ? isoString.split('T')[0] : '';
-    }
+            // 加载任务列表
+            loadTasks();
+        });
 
-    // 加载任务列表
-    function loadTasks() {
-        console.log('开始加载任务列表...');
-        const tbody = document.getElementById('taskTableBody');
-        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center;">加载中...</td></tr>';
-
-        fetch('/user/tasks', {
-            method: 'GET',
-            headers: {
-                'Accept': 'application/json',
-                'Content-Type': 'application/json'
-            },
-        })
-        .then(response => {
-            console.log('服务器响应状态:', response.status);
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+        // 添加格式化日期的函数
+        function formatDate(dateStr) {
+            if (!dateStr) return '未设置';
+            try {
+                const date = new Date(dateStr);
+                if (isNaN(date.getTime())) return '无效日期';
+                return date.toLocaleString('zh-CN', {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    hour12: false
+                });
+            } catch (error) {
+                console.error('日期格式化错误:', error);
+                return '格式错误';
             }
-            return response.json();
-        })
-        .then(data => {
-            console.log('获取到的原始数据:', data);
-            // 确保数据格式正确
-            const tasks = Array.isArray(data) ? data : (data.data || data.tasks || []);
-            console.log('处理后的任务数据:', tasks);
+        }
 
-            if (!tasks || tasks.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center;">暂无任务数据</td></tr>';
+        // 加载任务列表函数
+        async function loadTasks() {
+            try {
+                console.log('开始加载任务列表...');
+                
+                const token = localStorage.getItem('authToken');
+                if (!token) {
+                    throw new Error('未找到认证令牌');
+                }
+                
+                // 获取搜索关键词
+                const searchKeyword = document.getElementById('searchInput').value.trim();
+                let url = '/user/tasks';
+                
+                // 如果有搜索关键词，添加到URL中
+                if (isSearchMode && searchKeyword) {
+                    console.log('搜索模式，关键词:', searchKeyword);
+                    url += `?keyword=${encodeURIComponent(searchKeyword)}`;
+                }
+                
+                const response = await fetch(url, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Accept': 'application/json'
+                    }
+                });
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`加载任务列表失败: HTTP ${response.status} - ${errorText}`);
+                }
+
+                const data = await response.json();
+                console.log('获取到的任务数据:', data);
+                
+                const tbody = document.getElementById('taskTableBody');
+                tbody.innerHTML = '';
+
+                const tasks = data.tasks || [];
+                
+                if (tasks.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="7" style="text-align: center;">${isSearchMode ? '没有符合搜索条件的任务' : '暂无任务数据'}</td></tr>`;
+                    return;
+                }
+
+                // 渲染任务列表
+                tasks.forEach(task => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${task.id || ''}</td>
+                        <td>${task.title || '无标题'}</td>
+                        <td>${task.description || '无描述'}</td>
+                        <td>${mapPriorityToChinese(task.priority) || '中'}</td>
+                        <td>${mapStatusToChinese(task.status) || '待处理'}</td>
+                        <td>${formatDate(task.deadline)}</td>
+                        <td>
+                            <button class="btn btn-edit" onclick="editTask(${task.id})">编辑</button>
+                            <button class="btn btn-delete" onclick="deleteTask(${task.id})">删除</button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            } catch (error) {
+                console.error('加载任务列表失败:', error);
+                alert('加载任务列表失败：' + error.message);
+            }
+        }
+
+        // 辅助函数：将日期转换为ISO 8601格式并添加时间部分
+        function formatDateToISO(dateString) {
+            const date = new Date(dateString);
+            // 设置固定时间为 18:00:00
+            date.setHours(18, 0, 0, 0);
+            return date.toISOString();
+        }
+
+        // 辅助函数：从ISO时间格式中提取日期部分
+        function extractDateFromISO(isoString) {
+            return isoString ? isoString.split('T')[0] : '';
+        }
+
+        // Helper function to map status values to Chinese display names
+        function mapStatusToChinese(status) {
+            const lowerStatus = (status || '').toLowerCase();
+            switch (lowerStatus) {
+                case 'pending':
+                case 'todo': // Handle 'todo' as seen in the screenshot
+                    return '待处理';
+                case 'in_progress':
+                    return '进行中';
+                case 'completed':
+                    return '已完成';
+                default:
+                    return status || '未知'; // Fallback for unexpected values
+            }
+        }
+
+        // Helper function to map priority values to Chinese display names
+        function mapPriorityToChinese(priority) {
+            const lowerPriority = (priority || '').toLowerCase();
+            switch (lowerPriority) {
+                case 'high':
+                    return '高';
+                case 'medium':
+                    return '中';
+                case 'low':
+                    return '低';
+                default:
+                    return priority || '未知'; // Fallback
+            }
+        }
+
+        let currentPage = 1;
+        let totalPages = 1;
+        let isSearchMode = false;
+
+        // 更新分页控件
+        function updatePagination() {
+            if (isSearchMode) {
+                document.getElementById('pagination').style.display = 'none';
                 return;
             }
 
-            tbody.innerHTML = tasks.map(task => {
-                // 确保每个字段都有默认值
-                const safeTask = {
-                    ID: task.ID || task.id || '',
-                    Title: task.Title || task.title || '无标题',
-                    Description: task.Description || task.description || '无描述',
-                    Priority: task.Priority || task.priority || 'medium',
-                    Status: task.Status || task.status || 'pending',
-                    DueDate: extractDateFromISO(task.DueDate || task.due_date) || '未设置'
-                };
-
-                return `
-                    <tr>
-                        <td>${safeTask.ID}</td>
-                        <td>${safeTask.Title}</td>
-                        <td>${safeTask.Description}</td>
-                        <td>${safeTask.Priority}</td>
-                        <td>${safeTask.Status}</td>
-                        <td>${safeTask.DueDate}</td>
-                        <td>
-                            <button onclick="viewTask(${safeTask.ID})" class="btn-view">查看</button>
-                            <button onclick="editTask(${safeTask.ID})" class="btn-edit">编辑</button>
-                            <button onclick="deleteTask(${safeTask.ID})" class="btn-delete">删除</button>
-                        </td>
-                    </tr>
-                `;
-            }).join('');
-        })
-        .catch(error => {
-            console.error('加载任务列表失败:', error);
-            tbody.innerHTML = `
-                <tr>
-                    <td colspan="7" style="text-align: center;">
-                        加载失败: ${error.message}<br>
-                        <button onclick="loadTasks()" class="btn btn-primary" style="margin-top: 10px;">重新加载</button>
-                    </td>
-                </tr>
+            const pagination = document.getElementById('pagination');
+            let html = `
+                <button onclick="loadTasks(1)" ${currentPage === 1 ? 'disabled' : ''}>首页</button>
+                <button onclick="loadTasks(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''}>上一页</button>
+                <span class="page-info">第 ${currentPage} 页 / 共 ${totalPages} 页</span>
+                <button onclick="loadTasks(${currentPage + 1})" ${currentPage === totalPages ? 'disabled' : ''}>下一页</button>
+                <button onclick="loadTasks(${totalPages})" ${currentPage === totalPages ? 'disabled' : ''}>末页</button>
+                <span style="margin-left: 20px;">
+                    跳转到：<input type="number" min="1" max="${totalPages}" value="${currentPage}" 
+                    style="width: 60px; padding: 4px;" id="pageInput">
+                    <button onclick="jumpToPage()">确定</button>
+                </span>
             `;
-        });
-    }
+            pagination.innerHTML = html;
+        }
 
-    // 查看任务详情
-    function viewTask(id) {
-        console.log('查看任务:', id);
-        fetch(`/user/tasks/${id}`)
-            .then(response => response.json())
-            .then(data => {
-                console.log('任务详情:', data);
-                const task = data.task || data;
-                // 使用默认值防止 undefined
-                const safeTask = {
-                    ID: task.ID || task.id || '',
-                    Title: task.Title || task.title || '无标题',
-                    Description: task.Description || task.description || '无描述',
-                    Priority: task.Priority || task.priority || '中',
-                    Status: task.Status || task.status || '待处理',
-                    DueDate: task.DueDate || task.due_date || '未设置'
-                };
+        // 跳转到指定页面
+        function jumpToPage() {
+            const input = document.getElementById('pageInput');
+            let page = parseInt(input.value);
+            if (page < 1) page = 1;
+            if (page > totalPages) page = totalPages;
+            loadTasks(page);
+        }
 
-                alert(`任务详情：\n
-                    ID: ${safeTask.ID}\n
-                    标题: ${safeTask.Title}\n
-                    描述: ${safeTask.Description}\n
-                    优先级: ${safeTask.Priority}\n
-                    状态: ${safeTask.Status}\n
-                    截止日期: ${safeTask.DueDate}`);
+        // 查看任务详情
+        function viewTask(id) {
+            console.log('查看任务:', id);
+            
+            const token = localStorage.getItem('authToken');
+            
+            fetch(`/user/tasks/${id}`, {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                }
             })
-            .catch(error => {
-                console.error('查看失败:', error);
-                alert('获取任务信息失败');
-            });
-    }
+                .then(response => response.json())
+                .then(data => {
+                    console.log('任务详情:', data);
+                    const task = data.task || data;
+                    const safeTask = {
+                        ID: task.ID || task.id || '',
+                        Title: task.Title || task.title || '无标题',
+                        Description: task.Description || task.description || '无描述',
+                        Priority: task.Priority || task.priority || '中',
+                        Status: task.Status || task.status || '待处理',
+                        DueDate: task.DueDate || task.due_date || '未设置'
+                    };
 
-    // 编辑任务
-    function editTask(id) {
-        console.log('开始编辑任务:', id);
-        const form = document.getElementById('taskForm');
-        form.dataset.action = 'edit';
-        form.dataset.taskId = id;
+                    alert(`任务详情：\n
+                        ID: ${safeTask.ID}\n
+                        标题: ${safeTask.Title}\n
+                        描述: ${safeTask.Description}\n
+                        优先级: ${safeTask.Priority}\n
+                        状态: ${safeTask.Status}\n
+                        截止日期: ${safeTask.DueDate}`);
+                })
+                .catch(error => {
+                    console.error('查看失败:', error);
+                    alert('获取任务信息失败');
+                });
+        }
 
-        fetch(`/user/tasks/${id}`)
+        // 编辑任务
+        function editTask(id) {
+            console.log('开始编辑任务:', id);
+            const form = document.getElementById('taskForm');
+            form.dataset.action = 'edit';
+            form.dataset.taskId = id;
+
+            const token = localStorage.getItem('authToken');
+
+            fetch(`/user/tasks/${id}`, {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                }
+            })
             .then(response => {
                 if (!response.ok) {
                     throw new Error('获取任务详情失败');
@@ -333,7 +496,6 @@
                 console.log('获取到的任务数据:', data);
                 const task = data || {};
                 
-                // 使用统一的字段名格式并处理日期
                 const formData = {
                     title: task.Title || task.title || '',
                     description: task.Description || task.description || '',
@@ -349,346 +511,188 @@
                 document.getElementById('description').value = formData.description;
                 document.getElementById('priority').value = formData.priority;
                 document.getElementById('dueDate').value = formData.due_date;
-                
-                // 修改表单提交事件
-                const form = document.getElementById('taskForm');
-                form.onsubmit = function(e) {
-                    e.preventDefault();
-                    updateTask(id);
-                };
-                
+                document.getElementById('status').value = formData.status;
+                  
                 document.getElementById('taskModal').style.display = 'block';
             })
             .catch(error => {
                 console.error('编辑任务失败:', error);
                 alert('获取任务详情失败: ' + error.message);
             });
-    }
-
-    // 更新任务
-    function updateTask(id) {
-        const dueDate = document.getElementById('dueDate').value;
-        if (!dueDate) {
-            alert('请选择截止日期');
-            return;
         }
 
-        const formData = {
-            title: document.getElementById('title').value.trim(),
-            description: document.getElementById('description').value.trim(),
-            priority: document.getElementById('priority').value.toLowerCase(),
-            due_date: formatDateToISO(dueDate), // 使用新的日期格式化函数
-            status: "in_progress"
-        };
+        // 更新任务
+        function updateTask(id) {
+            const title = document.getElementById('title').value.trim();
+            const description = document.getElementById('description').value.trim();
+            const priority = document.getElementById('priority').value;
+            const status = document.getElementById('status').value;
+            const dueDate = document.getElementById('dueDate').value;
 
-        console.log('发送更新请求，任务ID:', id);
-        console.log('更新数据:', formData);
-
-        fetch(`/user/tasks/${id}`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            },
-            body: JSON.stringify(formData)
-        })
-        .then(response => {
-            console.log('更新响应状态:', response.status);
-            if (!response.ok) {
-                return response.text().then(text => {
-                    throw new Error(text || '更新失败');
-                });
+            if (!title || !dueDate) {
+                alert('请填写必填字段');
+                return;
             }
-            return response.json();
-        })
-        .then(data => {
-            console.log('更新成功，返回数据:', data);
-            alert('更新成功');
-            closeTaskModal();
-            loadTasks(); // 重新加载列表以显示更新后的数据
-        })
-        .catch(error => {
-            console.error('更新失败:', error);
-            alert('更新失败: ' + error.message);
-        });
-    }
 
-    // 删除任务
-    function deleteTask(id) {
-        if (!confirm('确定要删除此任务吗？')) return;
+            const formData = {
+                title: title,
+                description: description,
+                priority: priority,
+                status: status,
+                due_date: formatDateToISO(dueDate)
+            };
 
-        fetch(`/user/tasks/${id}`, {
-            method: 'DELETE'
-        })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error('删除失败');
-            }
-            return response.json();
-        })
-        .then(() => {
-            alert('删除成功');
-            loadTasks();
-        })
-        .catch(error => {
-            console.error('删除任务失败:', error);
-            alert('删除失败，请重试');
-        });
-    }
+            const token = localStorage.getItem('authToken');
 
-    // 搜索任务
-    function searchTasks() {
-        const searchTerm = document.getElementById('searchInput').value.toLowerCase();
-        const rows = document.getElementById('taskTableBody').getElementsByTagName('tr');
-        
-        Array.from(rows).forEach(row => {
-            const title = row.cells[1].textContent.toLowerCase();
-            const description = row.cells[2].textContent.toLowerCase();
-            row.style.display = (title.includes(searchTerm) || description.includes(searchTerm)) ? '' : 'none';
-        });
-    }
-
-    // 重置搜索并重新加载所有任务
-    function resetSearch() {
-        document.getElementById('searchInput').value = '';
-        loadTasks();
-    }
-
-    // 显示新建任务模态框
-    function showNewTaskModal() {
-        const form = document.getElementById('taskForm');
-        form.reset();
-        form.dataset.action = 'create';
-        delete form.dataset.taskId;
-        
-        // 设置默认日期为今天
-        const today = new Date();
-        const formattedToday = today.toISOString().split('T')[0];
-        document.getElementById('dueDate').value = formattedToday;
-
-        document.getElementById('modalTitle').textContent = '新建任务';
-        document.getElementById('taskModal').style.display = 'block';
-    }
-
-    // 创建新任务
-    function createTask() {
-        const dueDate = document.getElementById('dueDate').value;
-        if (!dueDate) {
-            alert('请选择截止日期');
-            return;
+            fetch(`/user/tasks/${id}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(formData)
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(err => Promise.reject(err));
+                }
+                return response.json();
+            })
+            .then(data => {
+                alert('更新成功');
+                closeTaskModal();
+                loadTasks();
+            })
+            .catch(error => {
+                console.error('更新失败:', error);
+                alert('更新失败: ' + (error.error || '未知错误'));
+            });
         }
 
-        const formData = {
-            title: document.getElementById('title').value.trim(),
-            description: document.getElementById('description').value.trim(),
-            priority: document.getElementById('priority').value.toLowerCase(),
-            due_date: formatDateToISO(dueDate), // 使用新的日期格式化函数
-            status: "pending"
-        };
+        // 删除任务
+        function deleteTask(id) {
+            if (!confirm('确定要删除此任务吗？')) return;
 
-        // 表单验证
-        if (!formData.title) {
-            alert('请输入任务标题');
-            return;
+            const token = localStorage.getItem('authToken');
+
+            fetch(`/user/tasks/${id}`, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('删除失败');
+                }
+                return response.json();
+            })
+            .then(() => {
+                alert('删除成功');
+                loadTasks();
+            })
+            .catch(error => {
+                console.error('删除任务失败:', error);
+                alert('删除失败，请重试');
+            });
         }
-        if (!formData.description) {
-            alert('请输入任务描述');
-            return;
-        }
 
-        console.log('发送创建请求，数据:', formData);
-
-        fetch('/user/tasks', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            },
-            body: JSON.stringify(formData)
-        })
-        .then(response => {
-            console.log('服务器响应状态:', response.status);
-            if (!response.ok) {
-                return response.text().then(text => {
-                    throw new Error(text || '创建失败');
-                });
-            }
-            return response.json();
-        })
-        .then(data => {
-            console.log('创建成功，返回数据:', data);
-            alert('任务创建成功');
-            closeTaskModal();
-            loadTasks();
-        })
-        .catch(error => {
-            console.error('创建失败:', error);
-            alert('创建失败: ' + error.message);
-        });
-    }
-
-    // 移除旧的表单提交事件监听器，改用新的方式
-    document.getElementById('taskForm').onsubmit = null;
-
-    // 关闭模态框
-    function closeTaskModal() {
-        document.getElementById('taskModal').style.display = 'none';
-    }
-
-    // 初始化事件监听
-    document.addEventListener('DOMContentLoaded', function() {
-        // 移除所有现有的提交事件监听器
-        const form = document.getElementById('taskForm');
-        const newForm = form.cloneNode(true);
-        form.parentNode.replaceChild(newForm, form);
-
-        // 设置新的提交事件监听器
-        newForm.addEventListener('submit', function(e) {
-            e.preventDefault();
-            if (newForm.dataset.action === 'edit') {
-                updateTask(newForm.dataset.taskId);
+        // 搜索任务
+        function searchTasks() {
+            const searchInput = document.getElementById('searchInput').value.trim();
+            if (searchInput) {
+                isSearchMode = true;
+                console.log('开始搜索:', searchInput);
+                loadTasks();
             } else {
-                createTask();
+                alert('请输入搜索关键词');
             }
-        });
-
-        // 初始化优先级选项
-        const prioritySelect = document.getElementById('priority');
-        prioritySelect.innerHTML = `
-            <option value="high">高</option>
-            <option value="medium">中</option>
-            <option value="low">低</option>
-        `;
-
-        // 加载任务列表
-        loadTasks();
-    });
-
-    // 关闭模态框的事件监听
-    document.querySelector('.close').addEventListener('click', closeTaskModal);
-    window.addEventListener('click', function(event) {
-        if (event.target == document.getElementById('taskModal')) {
-            closeTaskModal();
         }
-    });
 
-    // 修改初始化代码
-    document.addEventListener('DOMContentLoaded', function() {
-        console.log('页面初始化...');
-        
-        // 初始化表单处理
-        initializeForm();
-        
-        // 加载任务列表
-        loadTasks();
-    });
+        // 重置搜索并重新加载所有任务
+        function resetSearch() {
+            document.getElementById('searchInput').value = '';
+            isSearchMode = false;
+            loadTasks();
+        }
 
-    // 表单初始化函数
-    function initializeForm() {
-        const form = document.getElementById('taskForm');
-        
-        // 移除任何现有的事件监听器
-        const newForm = form.cloneNode(true);
-        form.parentNode.replaceChild(newForm, form);
-
-        // 添加新的提交事件监听器
-        newForm.addEventListener('submit', function(e) {
-            e.preventDefault();
-            console.log('表单提交，action:', this.dataset.action);
+        // 显示新建任务模态框
+        function showNewTaskModal() {
+            const form = document.getElementById('taskForm');
+            form.reset();
+            form.dataset.action = 'create';
+            delete form.dataset.taskId;
             
-            if (this.dataset.action === 'edit') {
-                updateTask(this.dataset.taskId);
-            } else {
-                createTask();
-            }
-        });
-    }
-
-    // 显示新建任务模态框
-    function showNewTaskModal() {
-        const form = document.getElementById('taskForm');
-        form.reset();
-        form.dataset.action = 'create';
-        delete form.dataset.taskId;
-        
-        const today = new Date();
-        const formattedToday = today.toISOString().split('T')[0];
-        document.getElementById('dueDate').value = formattedToday;
-        
-        document.getElementById('modalTitle').textContent = '新建任务';
-        document.getElementById('taskModal').style.display = 'block';
-    }
-
-    // 创建任务函数
-    function createTask() {
-        console.log('开始创建任务...');
-        const dueDate = document.getElementById('dueDate').value;
-        if (!dueDate) {
-            alert('请选择截止日期');
-            return;
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('dueDate').value = today;
+            
+            document.getElementById('title').value = '';
+            document.getElementById('description').value = '';
+            document.getElementById('priority').value = 'medium';
+            document.getElementById('status').value = 'pending';
+            
+            document.getElementById('modalTitle').textContent = '新建任务';
+            document.getElementById('taskModal').style.display = 'block';
         }
 
-        const formData = {
-            title: document.getElementById('title').value.trim(),
-            description: document.getElementById('description').value.trim(),
-            priority: document.getElementById('priority').value.toLowerCase(),
-            due_date: formatDateToISO(dueDate),
-            status: "pending"
-        };
+        // 创建任务函数
+        function createTask() {
+            const title = document.getElementById('title').value.trim();
+            const description = document.getElementById('description').value.trim();
+            const priority = document.getElementById('priority').value;
+            const dueDate = document.getElementById('dueDate').value;
 
-        if (!formData.title || !formData.description) {
-            alert('请填写完整信息');
-            return;
+            if (!title || !dueDate) {
+                alert('请填写必填字段');
+                return;
+            }
+
+            const formData = {
+                title: title,
+                description: description,
+                priority: priority,
+                due_date: formatDateToISO(dueDate)
+            };
+
+            const token = localStorage.getItem('authToken');
+            console.log('使用令牌:', token ? token.substring(0, 10) + '...' : '未找到'); // 调试信息
+
+            fetch('/user/tasks', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(formData)
+            })
+            .then(response => {
+                if (!response.ok) {
+                    console.error('创建任务失败，状态码:', response.status);
+                    return response.json().then(err => Promise.reject(err));
+                }
+                return response.json();
+            })
+            .then(data => {
+                alert('任务创建成功');
+                closeTaskModal();
+                loadTasks();
+            })
+            .catch(error => {
+                console.error('创建失败:', error);
+                alert('创建失败: ' + (error.error || error.message || '未知错误'));
+            });
         }
 
-        console.log('准备发送的数据:', formData);
-
-        fetch('/user/tasks', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            },
-            body: JSON.stringify(formData)
-        })
-        .then(response => {
-            console.log('服务器响应状态:', response.status);
-            if (!response.ok) {
-                return response.text().then(text => {
-                    throw new Error(text || '创建失败');
-                });
-            }
-            return response.json();
-        })
-        .then(data => {
-            console.log('创建成功，返回数据:', data);
-            closeTaskModal();
-            alert('任务创建成功');
-            loadTasks();
-        })
-        .catch(error => {
-            console.error('创建失败:', error);
-            alert('创建失败: ' + error.message);
-        });
-    }
-
-    // 关闭模态框
-    function closeTaskModal() {
-        document.getElementById('taskModal').style.display = 'none';
-        // 重置表单状态
-        const form = document.getElementById('taskForm');
-        form.reset();
-        delete form.dataset.action;
-        delete form.dataset.taskId;
-    }
-
-    // 移除旧的重复代码
-    // 删除以下内容：
-    // - document.getElementById('taskForm').onsubmit = null;
-    // - document.getElementById('taskForm').addEventListener('submit', function(e) {...});
-    // - 之前的 DOMContentLoaded 事件监听器中的重复代码
-
-    // ...其他现有代码保持不变...
-</script>
+        // 关闭模态框
+        function closeTaskModal() {
+            document.getElementById('taskModal').style.display = 'none';
+            const form = document.getElementById('taskForm');
+            form.reset();
+            delete form.dataset.action;
+            delete form.dataset.taskId;
+        }
+    </script>
 </body>
 </html>

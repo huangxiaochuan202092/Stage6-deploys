@@ -2,6 +2,7 @@ package utils
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"time"
 
@@ -29,17 +30,24 @@ func InitRedis() {
 // SetVerificationCode 设置验证码到 Redis
 func SetVerificationCode(email, code string) error {
 	ctx := context.Background()
-	return RedisClient.Set(ctx, email, code, 5*time.Minute).Err()
+	key := fmt.Sprintf("verify:%s", email)
+	return RedisClient.Set(ctx, key, code, 10*time.Minute).Err()
 }
 
 // GetVerificationCode 从 Redis 获取验证码
 func GetVerificationCode(email string) (string, error) {
 	ctx := context.Background()
-	return RedisClient.Get(ctx, email).Result()
+	key := fmt.Sprintf("verify:%s", email)
+	code, err := RedisClient.Get(ctx, key).Result()
+	if err != nil {
+		return "", fmt.Errorf("获取验证码失败: %v", err)
+	}
+	return code, nil
 }
 
 // DelVerificationCode 删除验证码 redis
 func DelVerificationCode(email string) error {
 	ctx := context.Background()
-	return RedisClient.Del(ctx, email).Err()
+	key := fmt.Sprintf("verify:%s", email)
+	return RedisClient.Del(ctx, key).Err()
 }

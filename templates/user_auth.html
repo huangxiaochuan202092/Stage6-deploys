@@ -169,6 +169,7 @@ async function sendCode() {
     }
 }
 
+// 处理表单提交的函数
 document.getElementById('authForm').addEventListener('submit', async function(event) {
     event.preventDefault();
     
@@ -200,23 +201,50 @@ document.getElementById('authForm').addEventListener('submit', async function(ev
             return;
         }
 
+        // 确保统一使用 authToken 作为令牌的键名
+        console.log('登录成功，保存令牌:', result.token);
+        localStorage.setItem('authToken', result.token);
+        localStorage.setItem('userInfo', JSON.stringify(result.user));
+        
+        // 备份到 sessionStorage
+        sessionStorage.setItem('authToken', result.token);
+        sessionStorage.setItem('userInfo', JSON.stringify(result.user));
+
         showMessage('验证成功，正在跳转...', false);
         
-        localStorage.setItem('userInfo', JSON.stringify({
-            email: email,
-            ...result.user
-        }));
-
-        setTimeout(() => {
-            window.location.href = '/admin';
-        }, 1000);
-
+        window.location.href = '/admin';
     } catch (error) {
+        console.error('请求失败:', error);
         showMessage('请求失败，请重试', true);
         submitBtn.disabled = false;
         submitBtn.textContent = '登录/注册';
     }
 });
+
+// 添加API请求拦截器
+function fetchWithAuth(url, options = {}) {
+    const token = localStorage.getItem('authToken'); // 修改为使用 authToken
+    if (!token) {
+        window.location.href = '/';
+        return;
+    }
+
+    const headers = {
+        ...options.headers,
+        'Authorization': `Bearer ${token}`
+    };
+
+    return fetch(url, { ...options, headers });
+}
+
+// 检查权限函数
+function checkPermission(resourceUserId) {
+    const userInfo = JSON.parse(localStorage.getItem('userInfo') || '{}');
+    const userRole = userInfo.role;
+    const userId = userInfo.id;
+    
+    return userRole === 'admin' || (userRole === 'user' && userId === resourceUserId);
+}
 </script>
 </body>
 </html>

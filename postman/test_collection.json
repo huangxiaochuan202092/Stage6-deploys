@@ -1,0 +1,1215 @@
+{
+  "info": {
+    "name": "API接口测试",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. 用户认证",
+      "item": [
+        {
+          "name": "发送验证码",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/user/send-code",
+              "host": ["{{base_url}}"],
+              "path": ["user", "send-code"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email\": \"huangxiaochuan2020@163.com\"\n}"
+            }
+          }
+        },
+        {
+          "name": "登录或注册",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = JSON.parse(responseBody);",
+                  "if (jsonData.data && jsonData.data.token) {",
+                  "    pm.environment.set(\"auth_token\", jsonData.data.token);",
+                  "    console.log(\"Token saved: \" + jsonData.data.token);",
+                  "}",
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/user/login-or-register",
+              "host": ["{{base_url}}"],
+              "path": ["user", "login-or-register"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email\": \"huangxiaochuan2020@163.com\",\n    \"code\": \"1234\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. 用户管理",
+      "item": [
+        {
+          "name": "获取所有用户",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = JSON.parse(responseBody);",
+                  "if (jsonData.data && jsonData.data.length > 0) {",
+                  "    var firstUserId = jsonData.data[0].id;",
+                  "    pm.environment.set(\"user_id\", firstUserId);",
+                  "    console.log(\"User ID saved: \" + firstUserId);",
+                  "}",
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/user/",
+              "host": ["{{base_url}}"],
+              "path": ["user", ""]
+            }
+          }
+        },
+        {
+          "name": "获取指定用户",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/user/{{user_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["user", "{{user_id}}"]
+            }
+          }
+        },
+        {
+          "name": "管理员-更新用户",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/user/{{user_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["user", "{{user_id}}"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"nickname\": \"更新的用户名\",\n    \"email\": \"updated_user_106@example.com\"\n}"
+            }
+          }
+        },
+        {
+          "name": "管理员-更新用户角色(测试)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "// 记录用户角色更新操作",
+                  "console.log(\"尝试更新用户角色。注意：此功能可能无效，需检查更新后的角色。\");",
+                  "",
+                  "// 设置角色检查标志",
+                  "pm.environment.set(\"check_role_update\", \"true\");"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/user/{{user_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["user", "{{user_id}}"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"nickname\": \"更新的用户名\",\n    \"role\": \"admin\",\n    \"email\": \"updated_admin_106@example.com\"\n}"
+            }
+          }
+        },
+        {
+          "name": "验证角色更新",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = JSON.parse(responseBody);",
+                  "",
+                  "if (pm.environment.get(\"check_role_update\") === \"true\") {",
+                  "    pm.test(\"检查角色是否成功更新\", function () {",
+                  "        // 检查是否有用户数据",
+                  "        if (jsonData.user) {",
+                  "            pm.expect(jsonData.user.Role).to.eql(\"admin\");",
+                  "            ",
+                  "            // 在控制台记录实际角色",
+                  "            console.log(\"用户当前角色: \" + jsonData.user.Role);",
+                  "            ",
+                  "            // 如果角色不是admin，记录可能的问题",
+                  "            if (jsonData.user.Role !== \"admin\") {",
+                  "                console.log(\"角色更新可能失败 - 预期'admin'，实际值是'\" + jsonData.user.Role + \"'\");",
+                  "            }",
+                  "        } else {",
+                  "            console.log(\"无法获取用户数据，请检查响应格式\");",
+                  "        }",
+                  "    });",
+                  "    ",
+                  "    // 重置标志",
+                  "    pm.environment.set(\"check_role_update\", \"false\");",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/user/{{user_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["user", "{{user_id}}"]
+            }
+          }
+        },
+        {
+          "name": "管理员-删除用户",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/user/2",
+              "host": ["{{base_url}}"],
+              "path": ["user", "2"]
+            }
+          }
+        },
+        {
+          "name": "获取当前用户",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = JSON.parse(responseBody);",
+                  "if (jsonData.data && jsonData.data.id) {",
+                  "    pm.environment.set(\"self_user_id\", jsonData.data.id);",
+                  "    console.log(\"Self User ID saved: \" + jsonData.data.id);",
+                  "}",
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/user/profile",
+              "host": ["{{base_url}}"],
+              "path": ["user", "profile"]
+            }
+          }
+        },
+        {
+          "name": "普通用户-更新自己",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/user/{{self_user_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["user", "{{self_user_id}}"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"nickname\": \"我的新昵称\",\n    \"email\": \"updated_self_user@example.com\"\n}"
+            }
+          }
+        },
+        {
+          "name": "普通用户-删除自己",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/user/{{self_user_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["user", "{{self_user_id}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. 博客管理",
+      "item": [
+        {
+          "name": "获取所有博客",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/user/blog",
+              "host": ["{{base_url}}"],
+              "path": ["user", "blog"]
+            }
+          }
+        },
+        {
+          "name": "获取指定博客",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/user/blog/1",
+              "host": ["{{base_url}}"],
+              "path": ["user", "blog", "1"]
+            }
+          }
+        },
+        {
+          "name": "创建博客",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = JSON.parse(responseBody);",
+                  "if (jsonData.data && jsonData.data.id) {",
+                  "    pm.environment.set(\"blog_id\", jsonData.data.id);",
+                  "}",
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/user/blog",
+              "host": ["{{base_url}}"],
+              "path": ["user", "blog"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"title\": \"测试博客标题\",\n    \"content\": \"测试博客内容\",\n    \"tags\": [\"测试\", \"博客\"]\n}"
+            }
+          }
+        },
+        {
+          "name": "更新博客",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/user/blog/{{blog_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["user", "blog", "{{blog_id}}"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"title\": \"更新后的博客标题\",\n    \"content\": \"更新后的博客内容\",\n    \"tags\": [\"测试\", \"更新\"]\n}"
+            }
+          }
+        },
+        {
+          "name": "删除博客",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/user/blog/{{blog_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["user", "blog", "{{blog_id}}"]
+            }
+          }
+        },
+        {
+          "name": "更新自己的博客",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/user/blog/{{self_blog_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["user", "blog", "{{self_blog_id}}"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"title\": \"我的个人博客(已更新)\",\n    \"content\": \"这是普通用户自己更新的博客内容\",\n    \"tags\": [\"个人\", \"更新\"]\n}"
+            }
+          }
+        },
+        {
+          "name": "删除自己的博客",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/user/blog/{{self_blog_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["user", "blog", "{{self_blog_id}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. 任务管理",
+      "item": [
+        {
+          "name": "获取所有任务",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/user/tasks",
+              "host": ["{{base_url}}"],
+              "path": ["user", "tasks"]
+            }
+          }
+        },
+        {
+          "name": "获取指定任务",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/user/tasks/1",
+              "host": ["{{base_url}}"],
+              "path": ["user", "tasks", "1"]
+            }
+          }
+        },
+        {
+          "name": "创建任务",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = JSON.parse(responseBody);",
+                  "if (jsonData.data && jsonData.data.id) {",
+                  "    pm.environment.set(\"task_id\", jsonData.data.id);",
+                  "}",
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/user/tasks",
+              "host": ["{{base_url}}"],
+              "path": ["user", "tasks"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"title\": \"测试任务\",\n    \"description\": \"这是一个测试任务\",\n    \"deadline\": \"2023-12-31T23:59:59Z\",\n    \"priority\": \"high\"\n}"
+            }
+          }
+        },
+        {
+          "name": "更新任务",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/user/tasks/{{task_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["user", "tasks", "{{task_id}}"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"title\": \"更新后的任务\",\n    \"description\": \"这是更新后的任务\",\n    \"deadline\": \"2023-12-31T23:59:59Z\",\n    \"priority\": \"medium\",\n    \"status\": \"completed\"\n}"
+            }
+          }
+        },
+        {
+          "name": "删除任务",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/user/tasks/{{task_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["user", "tasks", "{{task_id}}"]
+            }
+          }
+        },
+        {
+          "name": "更新自己的任务",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/user/tasks/{{self_task_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["user", "tasks", "{{self_task_id}}"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"title\": \"我的个人任务(已更新)\",\n    \"description\": \"这是普通用户自己更新的任务内容\",\n    \"deadline\": \"2023-12-31T23:59:59Z\",\n    \"priority\": \"medium\",\n    \"status\": \"in_progress\"\n}"
+            }
+          }
+        },
+        {
+          "name": "删除自己的任务",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/user/tasks/{{self_task_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["user", "tasks", "{{self_task_id}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. 问卷管理",
+      "item": [
+        {
+          "name": "5.1 问卷基本操作",
+          "item": [
+            {
+              "name": "获取所有问卷",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{auth_token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/user/wenjuans",
+                  "host": ["{{base_url}}"],
+                  "path": ["user", "wenjuans"]
+                }
+              }
+            },
+            {
+              "name": "搜索问卷",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{auth_token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/user/wenjuans/search?title=测试",
+                  "host": ["{{base_url}}"],
+                  "path": ["user", "wenjuans", "search"],
+                  "query": [
+                    {
+                      "key": "title",
+                      "value": "测试"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "取消置顶问卷",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{auth_token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/user/wenjuans/{{wenjuan_id}}/unpin",
+                  "host": ["{{base_url}}"],
+                  "path": ["user", "wenjuans", "{{wenjuan_id}}", "unpin"]
+                }
+              }
+            },
+            {
+              "name": "删除问卷",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{auth_token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/user/wenjuans/{{wenjuan_id}}",
+                  "host": ["{{base_url}}"],
+                  "path": ["user", "wenjuans", "{{wenjuan_id}}"]
+                }
+              }
+            },
+            {
+              "name": "创建普通用户问卷",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "var jsonData = JSON.parse(responseBody);",
+                      "if (jsonData.data && jsonData.data.id) {",
+                      "    pm.environment.set(\"self_wenjuan_id\", jsonData.data.id);",
+                      "    console.log(\"Self wenjuan ID saved: \" + jsonData.data.id);",
+                      "}",
+                      "pm.test(\"Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{auth_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/user/wenjuans",
+                  "host": ["{{base_url}}"],
+                  "path": ["user", "wenjuans"]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"title\": \"普通用户的问卷\",\n    \"description\": \"这是普通用户创建的问卷\",\n    \"categoryId\": 1,\n    \"isPublished\": true,\n    \"questions\": [\n        {\n            \"type\": \"single_choice\",\n            \"title\": \"您的性别是?\",\n            \"options\": [\"男\", \"女\", \"其他\"],\n            \"required\": true\n        },\n        {\n            \"type\": \"text\",\n            \"title\": \"您的建议?\",\n            \"required\": false\n        }\n    ]\n}"
+                }
+              }
+            },
+            {
+              "name": "更新自己的问卷",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{auth_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/user/wenjuans/{{self_wenjuan_id}}",
+                  "host": ["{{base_url}}"],
+                  "path": ["user", "wenjuans", "{{self_wenjuan_id}}"]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"title\": \"更新后的普通用户问卷\",\n    \"description\": \"这是普通用户更新后的问卷\",\n    \"categoryId\": 1,\n    \"isPublished\": true,\n    \"questions\": [\n        {\n            \"type\": \"single_choice\",\n            \"title\": \"您的性别是?\",\n            \"options\": [\"男\", \"女\", \"其他\", \"不愿透露\"],\n            \"required\": true\n        },\n        {\n            \"type\": \"text\",\n            \"title\": \"您有什么建议?\",\n            \"required\": true\n        }\n    ]\n}"
+                }
+              }
+            },
+            {
+              "name": "删除自己的问卷",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{auth_token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/user/wenjuans/{{self_wenjuan_id}}",
+                  "host": ["{{base_url}}"],
+                  "path": ["user", "wenjuans", "{{self_wenjuan_id}}"]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "5.2 问卷分类管理",
+          "item": [
+            {
+              "name": "获取所有分类",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{auth_token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/user/wenjuans/categories",
+                  "host": ["{{base_url}}"],
+                  "path": ["user", "wenjuans", "categories"]
+                }
+              }
+            },
+            {
+              "name": "创建分类",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "var jsonData = JSON.parse(responseBody);",
+                      "if (jsonData.data && jsonData.data.id) {",
+                      "    pm.environment.set(\"category_id\", jsonData.data.id);",
+                      "}",
+                      "pm.test(\"Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{auth_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/user/wenjuans/categories",
+                  "host": ["{{base_url}}"],
+                  "path": ["user", "wenjuans", "categories"]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"name\": \"测试分类\",\n    \"description\": \"这是一个测试分类\"\n}"
+                }
+              }
+            },
+            {
+              "name": "更新分类",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{auth_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/user/wenjuans/categories/{{category_id}}",
+                  "host": ["{{base_url}}"],
+                  "path": ["user", "wenjuans", "categories", "{{category_id}}"]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"name\": \"更新后的测试分类\",\n    \"description\": \"这是更新后的测试分类\"\n}"
+                }
+              }
+            },
+            {
+              "name": "删除分类",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{auth_token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/user/wenjuans/categories/{{category_id}}",
+                  "host": ["{{base_url}}"],
+                  "path": ["user", "wenjuans", "categories", "{{category_id}}"]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "5.3 问卷答案管理",
+          "item": [
+            {
+              "name": "提交问卷答案",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "var jsonData = JSON.parse(responseBody);",
+                      "if (jsonData.data && jsonData.data.id) {",
+                      "    pm.environment.set(\"answer_id\", jsonData.data.id);",
+                      "}",
+                      "pm.test(\"Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{auth_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/user/wenjuans/{{wenjuan_id}}/answers",
+                  "host": ["{{base_url}}"],
+                  "path": ["user", "wenjuans", "{{wenjuan_id}}", "answers"]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"answers\": [\n        {\n            \"questionIndex\": 0,\n            \"answer\": [\"选项1\"]\n        },\n        {\n            \"questionIndex\": 1,\n            \"answer\": [\"选项A\", \"选项B\"]\n        },\n        {\n            \"questionIndex\": 2,\n            \"answer\": [\"这是文本答案\"]\n        }\n    ]\n}"
+                }
+              }
+            },
+            {
+              "name": "获取问卷的所有答案",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{auth_token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/user/wenjuans/{{wenjuan_id}}/answers",
+                  "host": ["{{base_url}}"],
+                  "path": ["user", "wenjuans", "{{wenjuan_id}}", "answers"]
+                }
+              }
+            },
+            {
+              "name": "获取问卷答案统计",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{auth_token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/user/wenjuans/{{wenjuan_id}}/answers/stats",
+                  "host": ["{{base_url}}"],
+                  "path": ["user", "wenjuans", "{{wenjuan_id}}", "answers", "stats"]
+                }
+              }
+            },
+            {
+              "name": "获取指定问卷答案",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{auth_token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/user/wenjuans/{{wenjuan_id}}/answers/{{answer_id}}",
+                  "host": ["{{base_url}}"],
+                  "path": ["user", "wenjuans", "{{wenjuan_id}}", "answers", "{{answer_id}}"]
+                }
+              }
+            },
+            {
+              "name": "更新问卷答案",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{auth_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/user/wenjuans/{{wenjuan_id}}/answers/{{answer_id}}",
+                  "host": ["{{base_url}}"],
+                  "path": ["user", "wenjuans", "{{wenjuan_id}}", "answers", "{{answer_id}}"]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"answers\": [\n        {\n            \"questionIndex\": 0,\n            \"answer\": [\"选项2\"]\n        },\n        {\n            \"questionIndex\": 1,\n            \"answer\": [\"选项A\", \"选项C\"]\n        },\n        {\n            \"questionIndex\": 2,\n            \"answer\": [\"更新后的文本答案\"]\n        }\n    ]\n}"
+                }
+              }
+            },
+            {
+              "name": "删除问卷答案",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{auth_token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/user/wenjuans/{{wenjuan_id}}/answers/{{answer_id}}",
+                  "host": ["{{base_url}}"],
+                  "path": ["user", "wenjuans", "{{wenjuan_id}}", "answers", "{{answer_id}}"]
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "6. 额外路由测试",
+      "item": [
+        {
+          "name": "获取管理页面",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/admin",
+              "host": ["{{base_url}}"],
+              "path": ["admin"]
+            }
+          }
+        },
+        {
+          "name": "获取用户管理页面",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/user_manager",
+              "host": ["{{base_url}}"],
+              "path": ["user_manager"]
+            }
+          }
+        },
+        {
+          "name": "获取任务管理页面",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/task_manager",
+              "host": ["{{base_url}}"],
+              "path": ["task_manager"]
+            }
+          }
+        },
+        {
+          "name": "获取博客管理页面",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/blog_manager",
+              "host": ["{{base_url}}"],
+              "path": ["blog_manager"]
+            }
+          }
+        },
+        {
+          "name": "获取问卷管理页面",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/wenjuan_manager",
+              "host": ["{{base_url}}"],
+              "path": ["wenjuan_manager"]
+            }
+          }
+        },
+        {
+          "name": "获取主页",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/",
+              "host": ["{{base_url}}"],
+              "path": [""]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [""]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [""]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8080",
+      "type": "string"
+    }
+  ]
+}

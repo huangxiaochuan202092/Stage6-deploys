@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"proapp/config"
 	"proapp/handlers"
+	"proapp/middleware"
 	"proapp/utils"
 
 	"github.com/gin-gonic/gin"
@@ -69,98 +70,79 @@ func InitRouter() *gin.Engine {
 	// API 路由组
 	userGroup := r.Group("/user")
 	{
-		// 发送验证码的处理器
+		// 不需要认证的接口
 		userGroup.POST("/send-code", handlers.SendCodeHandler)
-
-		// 登录或注册的处理器
 		userGroup.POST("/login-or-register", handlers.LoginOrRegisterHandler)
 
-		// 用户管理
-		// 获取所有用户
-		userGroup.GET("/", handlers.GetAllUsersHandler)
-
-		// 根据 ID 获取用户
-		userGroup.GET("/:id", handlers.GetUserByIdHandler)
-
-		// 更新用户信息
-		userGroup.PUT("/:id", handlers.UpdateUserHandler)
-
-		// 删除用户
-		userGroup.DELETE("/:id", handlers.DeleteUserHandler)
-
-		//任务管理
-		// 创建任务
-		userGroup.POST("/tasks", handlers.CreateTask)
-
-		// 获取所有任务
-		userGroup.GET("/tasks", handlers.GetAllTasks)
-
-		// 获取单个任务
-		userGroup.GET("/tasks/:id", handlers.GetTask)
-
-		// 更新任务
-		userGroup.PUT("/tasks/:id", handlers.UpdateTask)
-
-		// 删除任务
-		userGroup.DELETE("/tasks/:id", handlers.DeleteTask)
-
-		//博客管理
-		// 创建博客
-		userGroup.POST("/blog", handlers.CreateBlog)
-
-		// 获取所有博客
-		userGroup.GET("/blog", handlers.GetAllBlogs)
-
-		// 获取单个博客
-		userGroup.GET("/blog/:id", handlers.GetBlogById)
-
-		// 更新博客
-		userGroup.PUT("/blog/:id", handlers.UpdateBlog)
-
-		// 删除博客
-		userGroup.DELETE("/blog/:id", handlers.DeleteBlog)
-
-		// 点赞博客
-		userGroup.POST("/blog/:id/like", handlers.LikeBlog)
-
-		// 取消点赞博客
-		userGroup.POST("/blog/:id/dislike", handlers.DislikeBlog)
-
-		// 问卷管理路由组
-		wenjuanGroup := userGroup.Group("/wenjuans")
+		// 需要认证的接口
+		auth := userGroup.Group("")
+		auth.Use(middleware.AuthMiddleware())
 		{
-			// 把搜索路由放在最前面，避免被其他路由匹配
-			wenjuanGroup.GET("/search", handlers.SearchWenjuanByTitle)
+			// 添加令牌验证路由
+			auth.GET("/validate-token", handlers.ValidateToken)
 
-			wenjuanGroup.POST("", handlers.CreateWenjuan)
-			wenjuanGroup.GET("", handlers.GetAllWenjuans)
-			wenjuanGroup.GET("/:id", handlers.GetWenjuanById)
-			wenjuanGroup.PUT("/:id", handlers.UpdateWenjuan)
-			wenjuanGroup.DELETE("/:id", handlers.DeleteWenjuan)
-			//根据标题搜索问卷
+			// 管理员接口
+			adminAuth := auth.Group("")
+			adminAuth.Use(middleware.RequireAdmin())
+			{
+				adminAuth.GET("/", handlers.GetAllUsersHandler)
+				adminAuth.PUT("/:id", handlers.UpdateUserHandler) // 管理员可以更新任何用户
+				adminAuth.DELETE("/:id", handlers.DeleteUserHandler)
+			}
 
-			// 置顶问卷
-			wenjuanGroup.POST("/:id/pin", handlers.PinWenjuan)
-			// 取消置顶问卷
-			wenjuanGroup.POST("/:id/unpin", handlers.UnpinWenjuan)
+			// 普通用户接口
+			auth.GET("/:id", handlers.GetUserByIdHandler)
+			auth.PUT("/self", handlers.UpdateUserSelfHandler) // 用户只能更新自己的信息
 
-			// 答案管理
-			wenjuanGroup.POST("/:id/submit", handlers.SubmitWenjuanAnswer)
-			wenjuanGroup.PUT("/:id/answers/:answerId", handlers.UpdateWenjuanAnswer)
-			wenjuanGroup.DELETE("/:id/answers/:answerId", handlers.DeleteWenjuanAnswer)
-			wenjuanGroup.GET("/:id/answers/:answerId", handlers.GetWenjuanAnswer)
+			// 博客管理
+			auth.GET("/blog", handlers.GetAllBlogs)
+			auth.GET("/blog/:id", handlers.GetBlogById)
+			auth.Use(middleware.CheckResourcePermission("blog"))
+			{
+				auth.POST("/blog", handlers.CreateBlog)
+				auth.PUT("/blog/:id", handlers.UpdateBlog)
+				auth.DELETE("/blog/:id", handlers.DeleteBlog)
+				// 添加点赞相关路由
+				auth.POST("/blog/:id/like", handlers.LikeBlog)
+				auth.POST("/blog/:id/dislike", handlers.DislikeBlog)
+			}
 
-			// PDF下载
-			wenjuanGroup.GET("/:id/download", handlers.DownloadWenjuanAndAnswers)
+			// 任务管理
+			auth.GET("/tasks", handlers.GetAllTasks)
+			auth.GET("/tasks/:id", handlers.GetTask)
+			auth.Use(middleware.CheckResourcePermission("task"))
+			{
+				auth.POST("/tasks", handlers.CreateTask)
+				auth.PUT("/tasks/:id", handlers.UpdateTask)
+				auth.DELETE("/tasks/:id", handlers.DeleteTask)
+			}
 
-			// 分类管理
-			wenjuanGroup.GET("/categories", handlers.GetAllCategories)
-			wenjuanGroup.POST("/categories", handlers.CreateCategory)
-			wenjuanGroup.PUT("/categories/:id", handlers.UpdateCategory)
-			wenjuanGroup.DELETE("/categories/:id", handlers.DeleteCategory)
+			// 问卷管理
+			wenjuan := auth.Group("/wenjuans")
+			{
+				// 公共查看接口
+				wenjuan.GET("", handlers.GetAllWenjuans)
+				wenjuan.GET("/search", handlers.SearchWenjuanByTitle)
+				wenjuan.GET("/:id", handlers.GetWenjuanById)
+				wenjuan.GET("/:id/answers/:answerId", handlers.GetWenjuanAnswer)
+				wenjuan.GET("/categories", handlers.GetAllCategories)
 
-			// 问卷分类关联
-			wenjuanGroup.POST("/:id/categories/:categoryId", handlers.AddCategoryToWenjuan)
+				// 需要权限验证的操作接口
+				authWenjuan := wenjuan.Group("")
+				authWenjuan.Use(middleware.CheckResourcePermission("wenjuan"))
+				{
+					authWenjuan.POST("", handlers.CreateWenjuan)
+					authWenjuan.PUT("/:id", handlers.UpdateWenjuan)
+					authWenjuan.DELETE("/:id", handlers.DeleteWenjuan)
+					authWenjuan.POST("/:id/pin", handlers.PinWenjuan)
+					authWenjuan.POST("/:id/unpin", handlers.UnpinWenjuan)
+					authWenjuan.POST("/categories", handlers.CreateCategory)
+					authWenjuan.PUT("/categories/:id", handlers.UpdateCategory)
+					authWenjuan.DELETE("/categories/:id", handlers.DeleteCategory)
+					authWenjuan.PUT("/:id/answers/:answerId", handlers.UpdateWenjuanAnswer)
+					authWenjuan.DELETE("/:id/answers/:answerId", handlers.DeleteWenjuanAnswer)
+				}
+			}
 		}
 	}
 

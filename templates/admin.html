@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh">
+<html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <title>后台管理</title>
@@ -66,9 +66,36 @@
             border: none;
             color: white;
         }
+
+        .user-info {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #f5f5f5;
+            padding: 10px 15px;
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .user-info span {
+            display: block;
+            margin: 5px 0;
+            color: #333;
+            font-size: 14px;
+        }
+
+        .user-role {
+            color: #409EFF;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
+    <div class="user-info">
+        <span class="user-role">角色：<span id="userRole"></span></span>
+        <span>邮箱：<span id="userEmail"></span></span>
+    </div>
+
     <div class="nav-sidebar">
         <div class="nav-header">
             <h2>后台管理</h2>
@@ -89,6 +116,34 @@
     </div>
 
     <script>
+        // 初始化验证用户状态
+        document.addEventListener('DOMContentLoaded', function() {
+            // 检查令牌和用户信息
+            const token = localStorage.getItem('authToken');
+            console.log('检查令牌状态:', token ? '存在' : '不存在', token ? token.substring(0, 10) + '...' : '');
+            
+            // 尝试从sessionStorage恢复
+            if (!token) {
+                const sessionToken = sessionStorage.getItem('authToken');
+                if (sessionToken) {
+                    console.log('从sessionStorage恢复令牌');
+                    localStorage.setItem('authToken', sessionToken);
+                } else {
+                    console.log('未找到有效令牌，需要重新登录');
+                    alert('请先登录');
+                    window.location.href = '/';
+                    return;
+                }
+            }
+
+            const userInfo = JSON.parse(localStorage.getItem('userInfo') || '{}');
+            console.log('用户信息:', userInfo);
+
+            // 显示用户信息
+            document.getElementById('userEmail').textContent = userInfo.email || '未知用户';
+            document.getElementById('userRole').textContent = userInfo.role === 'admin' ? '管理员' : '普通用户';
+        });
+
         // 页面导航
         function navigateTo(url) {
             window.location.href = url;
@@ -97,6 +152,11 @@
         // 退出登录
         function logout() {
             if (confirm('确定要退出登录吗？')) {
+                // 清除所有存储的信息
+                localStorage.removeItem('authToken');
+                localStorage.removeItem('userInfo');
+                sessionStorage.removeItem('authToken');
+                sessionStorage.removeItem('userInfo');
                 window.location.href = '/';
             }
         }

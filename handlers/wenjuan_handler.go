@@ -7,6 +7,7 @@ import (
 	"proapp/models"
 	"proapp/services"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -14,6 +15,16 @@ import (
 
 // 创建问卷
 func CreateWenjuan(c *gin.Context) {
+	// 从 token 中获取用户ID
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"code":    401,
+			"message": "未登录或登录已过期",
+		})
+		return
+	}
+
 	var input struct {
 		Title      string     `json:"title" binding:"required"`
 		Content    string     `json:"content" binding:"required"`
@@ -25,8 +36,26 @@ func CreateWenjuan(c *gin.Context) {
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"code":    400,
-			"message": "无效的请求参数",
+			"message": "请求参数错误",
 			"error":   err.Error(),
+		})
+		return
+	}
+
+	// 验证状态值
+	if input.Status != "" && input.Status != "draft" && input.Status != "published" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "状态值无效,只能是draft或published",
+		})
+		return
+	}
+
+	// 验证截止时间
+	if input.Deadline != nil && input.Deadline.Before(time.Now()) {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "截止时间不能早于当前时间",
 		})
 		return
 	}
@@ -43,10 +72,11 @@ func CreateWenjuan(c *gin.Context) {
 	}
 
 	wenjuan := &models.Wenjuan{
-		Title:    input.Title,
-		Content:  input.Content,
-		Status:   input.Status,
-		Deadline: input.Deadline,
+		Title:     input.Title,
+		Content:   input.Content,
+		Status:    input.Status,
+		Deadline:  input.Deadline,
+		CreatorID: userID.(uint), // 添加创建者ID
 	}
 
 	// 创建问卷并关联分类
@@ -70,10 +100,16 @@ func CreateWenjuan(c *gin.Context) {
 func GetAllWenjuans(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("pageSize", "20"))
-	isPinnedStr := c.DefaultQuery("isPinned", "false")
-	isPinned, _ := strconv.ParseBool(isPinnedStr)
+	isPinnedStr := c.DefaultQuery("isPinned", "")
+	var isPinned *bool
+	if isPinnedStr != "" {
+		val, err := strconv.ParseBool(isPinnedStr)
+		if err == nil {
+			isPinned = &val
+		}
+	}
 
-	data, err := services.GetAllWenjuans(page, pageSize, &isPinned)
+	data, err := services.GetAllWenjuans(page, pageSize, isPinned)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code":    500,
@@ -84,8 +120,9 @@ func GetAllWenjuans(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"code": 200,
-		"data": data,
+		"code":    200,
+		"message": "success",
+		"data":    data,
 	})
 }
 
@@ -105,6 +142,40 @@ func GetWenjuanById(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, wenjuan)
+}
+
+func GetWenjuanAnswers(c *gin.Context) {
+	id := c.Param("id")
+	idUint, err := strconv.ParseUint(id, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的ID"})
+		return
+	}
+
+	answers, err := services.GetWenjuanAnswers(int(idUint))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, answers)
+}
+
+func GetWenjuanAnswerStats(c *gin.Context) {
+	id := c.Param("id")
+	idUint, err := strconv.ParseUint(id, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的ID"})
+		return
+	}
+
+	stats, err := services.GetWenjuanAnswerStats(int(idUint))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, stats)
 }
 
 // 修改更新问卷处理函数
@@ -215,7 +286,34 @@ func DeleteWenjuan(c *gin.Context) {
 
 // 修改提交答案处理函数
 func SubmitWenjuanAnswer(c *gin.Context) {
-	wenjuanId, _ := strconv.Atoi(c.Param("id"))
+	// 从 JWT claims 获取用户邮箱
+	claims, exists := c.Get("userEmail")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"code":    401,
+			"message": "请先登录",
+		})
+		return
+	}
+
+	userEmail, ok := claims.(string)
+	if !ok || userEmail == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"code":    401,
+			"message": "无效的用户信息",
+		})
+		return
+	}
+
+	wenjuanId, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "无效的问卷ID",
+		})
+		return
+	}
+
 	var input struct {
 		Answer string `json:"answer" binding:"required"`
 	}
@@ -223,12 +321,25 @@ func SubmitWenjuanAnswer(c *gin.Context) {
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"code":    400,
-			"message": "无效的请求参数",
+			"message": "无效的答案格式",
+			"error":   err.Error(),
 		})
 		return
 	}
 
-	if err := services.SubmitWenjuanAnswer(wenjuanId, input.Answer); err != nil {
+	// 验证答案格式
+	var answers []string
+	if err := json.Unmarshal([]byte(input.Answer), &answers); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "答案必须是JSON数组格式",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	// 提交答案，传入用户邮箱
+	if err := services.SubmitWenjuanAnswer(wenjuanId, input.Answer, userEmail); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code":    500,
 			"message": "提交答案失败",
@@ -414,43 +525,43 @@ func GetAllCategories(c *gin.Context) {
 	c.JSON(http.StatusOK, result)
 }
 
-// 创建分类
+// 修改创建分类处理函数
 func CreateCategory(c *gin.Context) {
 	var input struct {
 		Name        string `json:"name" binding:"required"`
 		Description string `json:"description"`
 	}
+
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"code":    400,
-			"message": "无效的请求参数",
+			"message": "请求参数错误",
 			"error":   err.Error(),
 		})
 		return
 	}
 
-	// 先检查分类名称是否已存在
-	exists, err := services.CategoryExistsByName(input.Name)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"code":    500,
-			"message": "检查分类名称失败",
-			"error":   err.Error(),
-		})
-		return
-	}
+	input.Name = strings.TrimSpace(input.Name)
+	input.Description = strings.TrimSpace(input.Description)
 
-	if exists {
+	if input.Name == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"code":    400,
-			"message": "分类名称已存在",
-			"error":   "分类名称必须唯一",
+			"message": "分类名称不能为空",
 		})
 		return
 	}
 
-	// 创建分类
-	if err := services.CreateCategory(input.Name, input.Description); err != nil {
+	err := services.CreateCategory(input.Name, input.Description)
+	if err != nil {
+		if strings.Contains(err.Error(), "已存在") {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"code":    400,
+				"message": err.Error(),
+			})
+			return
+		}
+
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code":    500,
 			"message": "创建分类失败",
@@ -608,4 +719,22 @@ func SearchWenjuanByTitle(c *gin.Context) {
 		"code": 200,
 		"data": result,
 	})
+}
+
+func ExportWenjuanAnswers(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的问卷ID"})
+		return
+	}
+
+	csvData, err := services.ExportWenjuanAnswersAsCSV(uint(id))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.Header("Content-Type", "text/csv")
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=wenjuan_%d_answers.csv", id))
+	c.Data(http.StatusOK, "text/csv", csvData)
 }
