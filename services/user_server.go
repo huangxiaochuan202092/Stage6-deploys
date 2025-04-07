@@ -18,9 +18,11 @@ func GetUserByEmail(email string) (*models.User, error) {
 		return nil, errors.New("数据库连接未初始化")
 	}
 
+	// 使用新会话确保查询不受之前查询的影响
+	db := config.DB.Session(&gorm.Session{NewDB: true})
+
 	// 使用Find代替First，因为First在找不到记录时会返回error
-	// 移除 .Table("users") 让 GORM 从 &user 推断表名
-	result := config.DB.Unscoped().Where("email = ?", email).Find(&user)
+	result := db.Unscoped().Where("email = ?", email).Find(&user)
 
 	if result.Error != nil {
 		// 如果错误是 "记录未找到"，则返回 nil, nil
@@ -50,9 +52,12 @@ func CreateUser(email string) (*models.User, error) {
 		return nil, errors.New("数据库连接未初始化")
 	}
 
-	// 检查邮箱是否已存在，不使用事务，直接查询
+	// 创建新会话避免查询条件累积
+	db := config.DB.Session(&gorm.Session{NewDB: true})
+
+	// 检查邮箱是否已存在，使用新的会话
 	var existingUser models.User
-	result := config.DB.Unscoped().Where("email = ?", email).First(&existingUser)
+	result := db.Unscoped().Where("email = ?", email).First(&existingUser)
 	if result.Error == nil {
 		// 用户已存在
 		log.Printf("邮箱 %s 已存在", email)
@@ -63,13 +68,13 @@ func CreateUser(email string) (*models.User, error) {
 		return nil, result.Error
 	}
 
-	// 创建新用户，不使用事务直接创建
+	// 创建新用户，使用新的会话防止条件累积
 	newUser := models.User{
 		Email: email,
 		Role:  "user", // 确保设置默认角色
 	}
 
-	if err := config.DB.Create(&newUser).Error; err != nil {
+	if err := db.Create(&newUser).Error; err != nil {
 		log.Printf("创建用户失败: %v", err)
 		return nil, err
 	}

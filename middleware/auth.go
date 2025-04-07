@@ -84,11 +84,9 @@ func extractClaimsFromToken(tokenObj interface{}) map[string]interface{} {
 		return claims
 	}
 
-	// 尝试使用utils包特定的类型（如果有的话）
 	// 简化为打印token的详细结构，以便进一步分析
 	log.Printf("令牌结构详细内容: %#v", tokenObj)
 
-	// 最后尝试提取已知位置的Claims
 	// 基于日志观察到的结构
 	v := reflect.ValueOf(tokenObj)
 	if v.Kind() == reflect.Ptr && !v.IsNil() {
