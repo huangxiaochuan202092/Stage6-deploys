@@ -201,28 +201,47 @@
             align-items: center;
             margin-top: 20px;
             gap: 15px;
-            padding: 10px;
+            padding: 15px;
             background: #fff;
             border-radius: 4px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .pagination button {
+            min-width: 80px;
+            transition: all 0.2s ease;
+        }
+
+        .pagination button:disabled {
+            cursor: not-allowed;
+            opacity: 0.6;
+            background-color: #e9ecef;
+            color: #6c757d;
+        }
+
+        .btn-secondary {
+            background-color: #6c757d;
+            color: white;
         }
 
         .jump-page {
             display: flex;
             align-items: center;
             background: #f8f9fa;
-            padding: 5px 10px;
+            padding: 8px 12px;
             border-radius: 4px;
             gap: 10px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         }
 
         .jump-page input {
             width: 60px;
-            padding: 6px 8px;
+            padding: 6px 10px;
             border: 1px solid #ced4da;
             border-radius: 4px;
             text-align: center;
             font-size: 14px;
+            transition: border-color 0.2s;
         }
 
         .jump-page input:focus {
@@ -230,15 +249,11 @@
             border-color: #007bff;
             box-shadow: 0 0 0 2px rgba(0,123,255,0.25);
         }
-
-        .jump-page label {
-            color: #666;
-            font-size: 14px;
-        }
-
-        .jump-page button {
-            padding: 6px 12px;
-            font-size: 14px;
+        
+        /* 高亮搜索状态 */
+        .search-active {
+            background-color: #e2f0fd;
+            border: 1px solid #b8daff;
         }
 
         /* 美化滚动条 */
@@ -417,6 +432,38 @@
             return token;
         }
 
+        // 添加刷新令牌功能
+        async function refreshAuthToken() {
+            console.log('尝试刷新令牌...');
+            const oldToken = getAuthToken();
+            
+            try {
+                const response = await fetch('/user/refresh-token', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${oldToken}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`刷新令牌失败: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                // 保存新令牌，确保存储在所有可能的位置
+                localStorage.setItem('token', data.token);
+                localStorage.setItem('authToken', data.token);
+                
+                console.log('令牌已成功刷新');
+                return data.token;
+            } catch (error) {
+                console.error('刷新令牌失败:', error);
+                return null;
+            }
+        }
+
         // 处理未授权情况
         function handleUnauthorized() {
             console.error('用户未登录或登录已过期');
@@ -432,120 +479,205 @@
         let totalPages = 0;
         let currentSearchTitle = ''; // 添加搜索关键词变量
 
-        // 修改加载博客列表函数
+        // 添加获取当前用户ID的函数
+        function getCurrentUserID() {
+            try {
+                const token = getAuthToken();
+                if (!token) return null;
+                
+                const base64Url = token.split('.')[1];
+                const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+                const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+                    return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+                }).join(''));
+                
+                const payload = JSON.parse(jsonPayload);
+                return payload.id;
+            } catch (error) {
+                console.error('获取用户ID失败:', error);
+                return null;
+            }
+        }
+        
+        // 解析JWT
+        function parseJwt(token) {
+            try {
+                const base64Url = token.split('.')[1];
+                const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+                const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+                    return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+                }).join(''));
+                
+                return JSON.parse(jsonPayload);
+            } catch (error) {
+                console.error('解析JWT失败:', error);
+                return {};
+            }
+        }
+
+        // 增强的博客列表加载函数，添加更多错误处理
         async function loadBlogs() {
             try {
-                console.log('开始加载博客列表...');
+                console.log('开始加载博客列表，页码:', currentPage);
+                document.getElementById('blogList').innerHTML = '<tr><td colspan="8" style="text-align:center">正在加载数据...</td></tr>';
                 
-                const token = localStorage.getItem('authToken');
+                const token = getAuthToken();
                 if (!token) {
                     throw new Error('未找到认证令牌');
                 }
                 
-                // 注意这里修改为博客API路径
-                const response = await fetch('/user/blog', {
+                // 构建带分页参数的URL
+                const url = `/user/blog?page=${currentPage}&page_size=${pageSize}${currentSearchTitle ? '&keyword=' + encodeURIComponent(currentSearchTitle) : ''}`;
+                console.log('请求URL:', url);
+                
+                const response = await fetch(url, {
                     method: 'GET',
                     headers: {
                         'Authorization': `Bearer ${token}`,
-                        'Accept': 'application/json'
+                        'Content-Type': 'application/json'
                     }
                 });
                 
                 if (!response.ok) {
+                    if (response.status === 401) {
+                        // 尝试刷新token
+                        const newToken = await refreshAuthToken();
+                        if (newToken) {
+                            // 使用新token重试
+                            return loadBlogs();
+                        } else {
+                            handleUnauthorized();
+                            return;
+                        }
+                    }
+                    // 显示详细的错误信息
                     const errorText = await response.text();
-                    throw new Error(`加载博客列表失败: HTTP ${response.status} - ${errorText}`);
+                    document.getElementById('blogList').innerHTML = `
+                        <tr><td colspan="8" style="text-align:center">
+                            <p>获取博客列表失败: 服务器返回 ${response.status}</p>
+                            <details>
+                                <summary>查看详细错误</summary>
+                                <pre>${errorText}</pre>
+                            </details>
+                            <button onclick="loadBlogs()" class="btn btn-primary">重试</button>
+                        </td></tr>
+                    `;
+                    throw new Error(`获取博客列表失败: ${response.status} - ${errorText}`);
                 }
-
-                const data = await response.json();
-                console.log('获取到的博客数据:', data);
                 
-                // 获取正确的表格主体元素
-                const tbody = document.getElementById('blogList');
-                if (!tbody) {
-                    console.error('找不到表格主体元素 #blogList');
+                let data;
+                try {
+                    data = await response.json();
+                    console.log('获取到博客数据:', data); // 添加调试日志
+                } catch (jsonError) {
+                    document.getElementById('blogList').innerHTML = `
+                        <tr><td colspan="8" style="text-align:center">
+                            <p>解析数据失败: 服务器返回的不是有效的JSON格式</p>
+                            <button onclick="loadBlogs()" class="btn btn-primary">重试</button>
+                        </td></tr>
+                    `;
+                    throw new Error('解析响应JSON失败: ' + jsonError.message);
+                }
+                
+                // 检查数据格式是否正确并输出调试信息
+                if (!data || !Array.isArray(data.blogs)) {
+                    console.error('返回的数据格式:', data);
+                    throw new Error('返回的数据格式不正确');
+                }
+                
+                // 更新分页信息
+                totalPages = Math.ceil(data.total / pageSize) || 1; // 防止totalPages为0
+                updatePaginationUI();
+                
+                const blogList = document.getElementById('blogList');
+                if (data.blogs.length === 0) {
+                    blogList.innerHTML = '<tr><td colspan="8" style="text-align:center">暂无数据</td></tr>';
                     return;
                 }
                 
-                tbody.innerHTML = '';
+                blogList.innerHTML = '';
+                data.blogs.forEach(blog => {
+                    // 添加空值检查和默认值
+                    const contentPreview = blog.content ? 
+                        (blog.content.length > 30 ? blog.content.substring(0, 30) + '...' : blog.content) : 
+                        '无内容';
+                    const category = blog.category || '未分类';
+                    const tags = blog.tags || '无标签';
+                    
+                    console.log('处理博客数据:', { 
+                        id: blog.id, 
+                        title: blog.title, 
+                        content: contentPreview,
+                        category: category,
+                        tags: tags 
+                    });
 
-                const blogs = data.blogs || [];
-                
-                if (blogs.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="8" style="text-align: center;">暂无博客数据</td></tr>';
-                    return;
-                }
-
-                // 渲染博客列表，修正变量引用错误
-                blogs.forEach(blog => {
-                    const tr = document.createElement('tr');
-                    tr.innerHTML = `
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
                         <td>${blog.id || ''}</td>
-                        <td>${blog.title || '无标题'}</td>
-                        <td>${blog.content?.substring(0, 50) + (blog.content?.length > 50 ? '...' : '') || '无内容'}</td>
-                        <td>${blog.category || '无分类'}</td>
-                        <td>${blog.tags || '无标签'}</td>
-                        <td>${blog.status || '草稿'}</td>
+                        <td>${blog.title || ''}</td>
+                        <td>${contentPreview}</td>
+                        <td>${category}</td>
+                        <td>${tags}</td>
+                        <td>${blog.status === 'published' ? '已发布' : '草稿'}</td>
                         <td>${formatDate(blog.created_at)}</td>
                         <td>
-                            <button class="btn btn-view" onclick="viewBlog(${blog.id})">查看</button>
-                            <button class="btn btn-edit" onclick="editBlog(${blog.id})">编辑</button>
-                            <button class="btn btn-delete" onclick="deleteBlog(${blog.id})">删除</button>
+                            <button class="btn btn-warning" onclick="editBlog(${blog.id})">编辑</button>
+                            <button class="btn btn-danger" onclick="deleteBlog(${blog.id})">删除</button>
+                            <button class="btn btn-primary" onclick="viewBlog(${blog.id})">查看</button>
                         </td>
                     `;
-                    tbody.appendChild(tr);
+                    blogList.appendChild(row);
                 });
             } catch (error) {
                 console.error('加载博客列表失败:', error);
-                // 在页面上显示错误消息，而不仅仅是alert
-                const tbody = document.getElementById('blogList');
-                if (tbody) {
-                    tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: red;">
-                        加载博客列表失败：${error.message}</td></tr>`;
-                } else {
-                    alert('加载博客列表失败：' + error.message);
-                }
+                document.getElementById('blogList').innerHTML = `
+                    <tr><td colspan="8" style="text-align:center">
+                        <p>加载数据失败: ${error.message}</p>
+                        <button onclick="loadBlogs()" class="btn btn-primary">重试</button>
+                    </td></tr>
+                `;
             }
         }
 
-        // 确保DOM加载完成后执行
-        document.addEventListener('DOMContentLoaded', function() {
-            console.log('DOM加载完成，准备初始化博客管理');
-            try {
-                // 检查令牌并记录状态
-                const token = getAuthToken();
-                if (!token) {
-                    console.warn('未找到授权token，请先登录');
-                    handleUnauthorized();
-                    return;
-                }
-                
-                // 加载博客列表
-                loadBlogs();
-            } catch (error) {
-                console.error('初始化失败:', error);
-                alert('页面初始化失败: ' + error.message);
+        // 更新分页UI
+        function updatePaginationUI() {
+            document.getElementById('pageInfo').textContent = `第 ${currentPage} 页 / 共 ${totalPages} 页`;
+            document.getElementById('prevBtn').disabled = currentPage <= 1;
+            document.getElementById('nextBtn').disabled = currentPage >= totalPages;
+            document.getElementById('pageInput').setAttribute('max', totalPages);
+        }
+
+        // 切换页面
+        function changePage(page) {
+            if (page < 1 || page > totalPages) return;
+            currentPage = page;
+            loadBlogs();
+        }
+
+        // 跳转到指定页面
+        function jumpToPage() {
+            const input = document.getElementById('pageInput');
+            const page = parseInt(input.value);
+            if (isNaN(page) || page < 1 || page > totalPages) {
+                alert('请输入有效的页码');
+                return;
             }
-        });
+            currentPage = page;
+            loadBlogs();
+            input.value = '';
+        }
 
         // 格式化日期
-        function formatDate(dateStr) {
-            if (!dateStr) return '';
-            const date = new Date(dateStr);
-            if (isNaN(date.getTime())) return ''; // 处理无效日期
+        function formatDate(dateString) {
+            const date = new Date(dateString);
             return date.toLocaleString('zh-CN', {
                 year: 'numeric',
                 month: '2-digit',
                 day: '2-digit',
                 hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit',
-                hour12: false
+                minute: '2-digit'
             });
-        }
-
-        // 显示添加模态框
-        function showAddModal() {
-            document.getElementById('addModal').style.display = 'block';
         }
 
         // 关闭模态框
@@ -553,514 +685,532 @@
             document.getElementById(modalId).style.display = 'none';
         }
 
-        // 添加博客
-        document.getElementById('addForm').onsubmit = function(e) {
+        // 创建博客
+        document.getElementById('addForm').addEventListener('submit', async function(e) {
             e.preventDefault();
-            if (!checkLogin()) return;
-
-            const formData = new FormData(e.target);
-            const data = {
-                title: formData.get('title'),
-                content: formData.get('content'),
-                category: formData.get('category'),
-                tags: formData.get('tags'),
-                status: formData.get('status')
-            };
-
-            const token = localStorage.getItem('token');
-            fetch('/user/blog', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify(data)
-            })
-            .then(response => {
-                if (!response.ok) {
-                    return response.json().then(err => Promise.reject(err));
+            try {
+                const token = getAuthToken();
+                if (!token) {
+                    throw new Error('未找到认证令牌');
                 }
-                return response.json();
-            })
-            .then(result => {
+                
+                const formData = new FormData(this);
+                const blogData = {
+                    title: formData.get('title'),
+                    content: formData.get('content'),
+                    category: formData.get('category'),
+                    tags: formData.get('tags'),
+                    status: formData.get('status')
+                };
+                
+                const response = await fetch('/user/blog', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(blogData)
+                });
+                
+                if (!response.ok) {
+                    if (response.status === 401) {
+                        // 尝试刷新token
+                        const newToken = await refreshAuthToken();
+                        if (!newToken) {
+                            handleUnauthorized();
+                            return;
+                        }
+                    }
+                    throw new Error(`创建博客失败: ${response.status}`);
+                }
+                
                 closeModal('addModal');
-                e.target.reset();
-                loadBlogs();
-                alert('博客创建成功');
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('创建失败：' + (error.error || error.message || '未知错误'));
-            });
-        };
+                alert('博客创建成功！');
+                loadBlogs(); // 重新加载博客列表
+                
+            } catch (error) {
+                console.error('创建博客失败:', error);
+                alert(`创建博客失败: ${error.message}`);
+            }
+        });
 
-        // 修改编辑博客函数
-        function editBlog(id) {
-            console.log('正在获取博客数据, ID:', id); // 调试日志
-            const token = getAuthToken(); // 使用统一的getAuthToken函数获取token
-            
-            fetch(`/user/blog/${id}`, {
-                headers: {
-                    'Authorization': `Bearer ${token}` // 添加Authorization头
+        // 获取博客详情 - 增强错误处理
+        async function getBlogById(id) {
+            try {
+                const token = getAuthToken();
+                if (!token) {
+                    throw new Error('未找到认证令牌');
                 }
-            })
-            .then(response => {
-                if (response.status === 401) {
-                    alert('请先登录');
-                    window.location.href = '/';
-                    return Promise.reject('Unauthorized');
+                
+                if (!id || isNaN(id)) {
+                    throw new Error('无效的博客ID');
                 }
+                
+                const response = await fetch(`/user/blog/${id}`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
                 if (!response.ok) {
-                    return response.json().then(err => Promise.reject(err));
+                    if (response.status === 401) {
+                        // 尝试刷新token
+                        const newToken = await refreshAuthToken();
+                        if (newToken) {
+                            // 使用新token重试
+                            return getBlogById(id);
+                        } else {
+                            handleUnauthorized();
+                            return null;
+                        }
+                    }
+                    throw new Error(`获取博客详情失败: ${response.status}`);
                 }
-                return response.json();
-            })
-            .then(data => {
-                console.log('服务器返回的博客数据:', data); // 调试日志
                 
-                // 确保我们从正确的响应结构中获取博客数据
-                const blog = data.blog || data;
+                const responseData = await response.json();
+                console.log('获取到的博客详情数据:', responseData); // 添加调试日志
+
+                // 检查返回的数据结构
+                if (!responseData || !responseData.status || responseData.status !== 'success') {
+                    throw new Error('服务器返回的数据结构不正确');
+                }
+
+                const blog = responseData.data?.blog;
                 
-                if (!blog) {
-                    throw new Error('未获取到博客数据');
+                // 验证博客数据
+                if (!blog || typeof blog !== 'object' || !blog.id) {
+                    throw new Error('服务器返回的博客数据无效');
                 }
                 
-                const form = document.getElementById('editForm');
-                
-                // 重置表单
-                form.reset();
-                
-                // 设置表单字段值
-                form.querySelector('[name="id"]').value = id;
-                form.querySelector('[name="title"]').value = blog.title || '';
-                form.querySelector('[name="content"]').value = blog.content || '';
-                form.querySelector('[name="category"]').value = blog.category || '';
-                form.querySelector('[name="tags"]').value = blog.tags || '';
-                form.querySelector('[name="status"]').value = blog.status || 'draft';
-                
-                // 显示模态框
-                document.getElementById('editModal').style.display = 'block';
-            })
-            .catch(error => {
-                console.error('获取博客数据失败:', error);
-                alert('获取博客信息失败，请重试');
-            });
+                return blog;
+            } catch (error) {
+                console.error('获取博客详情失败:', error);
+                alert(`获取博客详情失败: ${error.message}`);
+                return null;
+            }
         }
 
-        // 修复更新博客函数，确保数据正确提交
-        document.getElementById('editForm').onsubmit = function(e) {
-            e.preventDefault();
-            const form = document.getElementById('editForm');
-            const id = form.querySelector('[name="id"]').value;
+        // 编辑博客 - 增强错误处理
+        async function editBlog(id) {
+            if (!checkLogin()) return;
             
-            // 验证表单数据
-            const title = form.querySelector('[name="title"]').value.trim();
-            if (!title) {
-                alert('标题不能为空');
+            if (!id || isNaN(id)) {
+                alert('无效的博客ID');
                 return;
             }
             
-            // 构建提交数据，使用具体字段名称
-            const data = {
-                title: title,
-                content: form.querySelector('[name="content"]').value.trim(),
-                category: form.querySelector('[name="category"]').value.trim(),
-                tags: form.querySelector('[name="tags"]').value.trim(),
-                status: form.querySelector('[name="status"]').value
-            };
+            console.log('获取博客详情，ID:', id);
+            
+            try {
+                const blog = await getBlogById(id);
+                if (!blog) {
+                    throw new Error('获取博客信息失败或博客不存在');
+                }
 
-            console.log('提交的更新数据:', data); // 调试日志
-            const token = getAuthToken(); // 使用统一的getAuthToken函数
+                // 填充表单数据
+                const form = document.getElementById('editForm');
+                form.elements['id'].value = blog.id;
+                form.elements['title'].value = blog.title || '';
+                form.elements['content'].value = blog.content || '';
+                form.elements['category'].value = blog.category || '';
+                form.elements['tags'].value = blog.tags || '';
+                form.elements['status'].value = blog.status || 'draft';
 
-            // 显示加载状态
-            const submitBtn = form.querySelector('button[type="submit"]');
-            submitBtn.disabled = true;
-            submitBtn.innerHTML = '更新中...';
+                // 显示编辑模态框
+                document.getElementById('editModal').style.display = 'block';
+            } catch (error) {
+                console.error('编辑博客失败:', error);
+                alert(error.message);
+            }
+        }
 
-            fetch(`/user/blog/${id}`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify(data)
-            })
-            .then(response => {
-                if (response.status === 401) {
-                    alert('请先登录');
-                    window.location.href = '/';
-                    return Promise.reject('Unauthorized');
+        // 更新博客 - 修复博客ID传递问题
+        document.getElementById('editForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            try {
+                const token = getAuthToken();
+                if (!token) {
+                    throw new Error('未找到认证令牌');
                 }
                 
-                // 检查非200状态码
+                const formData = new FormData(this);
+                const blogId = formData.get('id');
+                
+                // 检查blogId是否有效
+                if (!blogId || blogId === 'undefined') {
+                    throw new Error('博客ID无效，无法更新');
+                }
+                
+                console.log('正在更新博客，ID:', blogId);
+                
+                const blogData = {
+                    title: formData.get('title'),
+                    content: formData.get('content'),
+                    category: formData.get('category'),
+                    tags: formData.get('tags'),
+                    status: formData.get('status')
+                };
+                
+                // 记录要提交的数据，用于调试
+                console.log('提交的博客数据:', blogData);
+                
+                const response = await fetch(`/user/blog/${blogId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(blogData)
+                });
+                
                 if (!response.ok) {
-                    return response.json().then(err => Promise.reject(err));
+                    if (response.status === 401) {
+                        // 尝试刷新token
+                        const newToken = await refreshAuthToken();
+                        if (!newToken) {
+                            handleUnauthorized();
+                            return;
+                        }
+                    }
+                    
+                    // 尝试获取更详细的错误信息
+                    let errorText = '';
+                    try {
+                        const errorData = await response.json();
+                        errorText = errorData.error || errorData.message || '';
+                    } catch {
+                        errorText = await response.text();
+                    }
+                    
+                    throw new Error(`更新博客失败: ${response.status} ${errorText}`);
                 }
                 
-                return response.json();
-            })
-            .then(result => {
-                console.log('更新结果:', result);
+                closeModal('editModal');
+                alert('博客更新成功！');
+                loadBlogs(); // 重新加载博客列表
                 
-                // 关闭模态框
-                document.getElementById('editModal').style.display = 'none';
-                
-                // 重新加载博客列表以显示更新后的数据
-                loadBlogs();
-                
-                // 显示成功提示
-                alert('更新成功');
-            })
-            .catch(error => {
-                console.error('更新失败:', error);
-                alert('更新失败: ' + (error.message || '服务器错误，请重试'));
-            })
-            .finally(() => {
-                // 恢复按钮状态
-                submitBtn.disabled = false;
-                submitBtn.innerHTML = '更新';
-            });
-        };
+            } catch (error) {
+                console.error('更新博客失败:', error);
+                alert(`更新博客失败: ${error.message}`);
+            }
+        });
 
         // 删除博客
-        function deleteBlog(id) {
-            if (confirm('确定要删除这篇博客吗？')) {
-                const token = localStorage.getItem('token'); // 获取token
-                fetch(`/user/blog/${id}`, {
+        async function deleteBlog(id) {
+            if (!checkLogin()) return;
+            
+            if (!confirm('确定要删除这篇博客吗？此操作不可撤销。')) {
+                return;
+            }
+            
+            try {
+                const token = getAuthToken();
+                if (!token) {
+                    throw new Error('未找到认证令牌');
+                }
+                
+                const response = await fetch(`/user/blog/${id}`, {
                     method: 'DELETE',
                     headers: {
-                        'Authorization': `Bearer ${token}` // 添加Authorization头
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
                     }
-                })
-                    .then(response => {
-                         if (response.status === 401) {
-                             alert('请先登录');
-                             window.location.href = '/';
-                             return Promise.reject('Unauthorized');
-                         }
-                         // 删除成功通常返回 204 No Content，没有 JSON body
-                         if (response.ok || response.status === 204) {
-                             return { message: '删除成功' }; // 模拟成功消息
-                         }
-                         return response.json().then(err => Promise.reject(err));
-                     })
-                    .then(data => {
-                        loadBlogs();
-                        alert('博客删除成功');
-                    })
-                    .catch(error => alert('删除失败：' + error));
-            }
-        }
+                });
 
-        // 修改搜索博客函数
-        function searchBlogs() {
-            console.log('开始搜索博客'); 
-            currentSearchTitle = document.getElementById('searchInput').value.trim();
-            
-            if (!currentSearchTitle) {
-                alert('请输入搜索关键词');
-                return;
-            }
-            
-            currentPage = 1; // 重置到第一页
-            
-            const token = getAuthToken();
-            if (!token) {
-                handleUnauthorized();
-                return;
-            }
-            
-            // 显示加载状态
-            const tbody = document.getElementById('blogList');
-            if (tbody) {
-                tbody.innerHTML = '<tr><td colspan="8" style="text-align: center;">正在搜索...</td></tr>';
-            }
-            
-            // 构建搜索URL
-            const url = `/user/blog?keyword=${encodeURIComponent(currentSearchTitle)}`;
-            console.log('搜索URL:', url);
-            
-            fetch(url, {
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Accept': 'application/json'
-                }
-            })
-            .then(response => {
+                // 处理不同的错误状态
                 if (!response.ok) {
-                    throw new Error(`搜索失败：HTTP ${response.status}`);
+                    let errorMessage = '';
+                    
+                    try {
+                        const errorData = await response.json();
+                        errorMessage = errorData.message || errorData.error;
+                    } catch {
+                        // 如果无法解析JSON，则尝试获取文本
+                        errorMessage = await response.text();
+                    }
+
+                    switch (response.status) {
+                        case 401:
+                            // 尝试刷新token
+                            const newToken = await refreshAuthToken();
+                            if (!newToken) {
+                                handleUnauthorized();
+                                return;
+                            }
+                            break;
+                        case 403:
+                            throw new Error('您没有权限删除这篇博客，只有博客的作者才能删除');
+                        case 404:
+                            throw new Error('博客不存在或已被删除');
+                        default:
+                            throw new Error(errorMessage || `删除失败 (${response.status})`);
+                    }
                 }
-                return response.json();
-            })
-            .then(data => {
-                console.log('搜索结果:', data);
-                renderBlogList(data.blogs || []);
-            })
-            .catch(error => {
-                console.error('搜索失败:', error);
-                if (tbody) {
-                    tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: red;">
-                        搜索失败：${error.message}</td></tr>`;
-                }
-            });
+                
+                alert('博客删除成功！');
+                loadBlogs(); // 重新加载博客列表
+                
+            } catch (error) {
+                console.error('删除博客失败:', error);
+                // 使用更友好的错误提示
+                const errorMessage = error.message.includes('权限') || error.message.includes('403') 
+                    ? '权限不足：只有博客作者才能删除自己的博客'
+                    : `删除失败：${error.message}`;
+                
+                // 使用更醒目的提示方式
+                const userMessage = `
+                    <div style="text-align: center;">
+                        <p style="color: red; font-weight: bold;">${errorMessage}</p>
+                    </div>
+                `;
+                
+                // 可以选择使用模态框显示错误信息
+                const errorModal = document.createElement('div');
+                errorModal.style.cssText = `
+                    position: fixed;
+                    top: 50%;
+                    left: 50%;
+                    transform: translate(-50%, -50%);
+                    background: white;
+                    padding: 20px;
+                    border-radius: 8px;
+                    box-shadow: 0 0 10px rgba(0,0,0,0.3);
+                    z-index: 1000;
+                `;
+                errorModal.innerHTML = `
+                    ${userMessage}
+                    <div style="text-align: center; margin-top: 15px;">
+                        <button onclick="this.parentElement.parentElement.remove()" 
+                                style="padding: 8px 15px; background: #007bff; color: white; 
+                                       border: none; border-radius: 4px; cursor: pointer;">
+                            确定
+                        </button>
+                    </div>
+                `;
+                document.body.appendChild(errorModal);
+                
+                // 3秒后自动关闭
+                setTimeout(() => {
+                    if (errorModal.parentElement) {
+                        errorModal.remove();
+                    }
+                }, 3000);
+            }
         }
 
-        // 添加博客列表渲染函数
-        function renderBlogList(blogs) {
-            const tbody = document.getElementById('blogList');
-            if (!tbody) return;
+        // 查看博客 - 更新页面显示
+        async function viewBlog(id) {
+            if (!checkLogin()) return;
             
-            tbody.innerHTML = '';
+            const blog = await getBlogById(id);
+            if (!blog) return;
             
-            if (blogs.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="8" style="text-align: center;">没有找到匹配的博客</td></tr>';
-                return;
+            const blogDetailElem = document.getElementById('blogDetail');
+            blogDetailElem.innerHTML = `
+                <h3>${blog.title}</h3>
+                <p><strong>分类:</strong> ${blog.category || '未分类'}</p>
+                <p><strong>标签:</strong> ${blog.tags || '无标签'}</p>
+                <p><strong>状态:</strong> ${blog.status === 'published' ? '已发布' : '草稿'}</p>
+                <p><strong>创建时间:</strong> ${formatDate(blog.created_at)}</p>
+                <div class="blog-content">${blog.content || '无内容'}</div>
+            `;
+
+            // 更新点赞按钮和计数
+            const likeButton = document.getElementById('likeButton');
+            const likeCount = document.getElementById('likeCount');
+            
+            // 清除之前的点赞状态
+            likeButton.classList.remove('active');
+            
+            // 设置点赞计数
+            likeCount.textContent = blog.likes || 0;
+            
+            // 检查当前用户是否已点赞
+            checkIfUserLiked(id);
+            
+            // 设置点赞按钮点击事件
+            likeButton.onclick = function() {
+                toggleLike(id);
+            };
+            
+            // 显示模态框
+            document.getElementById('viewBlogModal').style.display = 'block';
+        }
+
+        // 点赞/取消点赞
+        async function toggleLike(blogId) {
+            try {
+                const token = getAuthToken();
+                if (!token) {
+                    throw new Error('未找到认证令牌');
+                }
+                
+                console.log('发送点赞请求，博客ID:', blogId);
+                
+                const response = await fetch(`/user/blog/${blogId}/like`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (!response.ok) {
+                    if (response.status === 401) {
+                        // 尝试刷新token
+                        const newToken = await refreshAuthToken();
+                        if (!newToken) {
+                            handleUnauthorized();
+                            return;
+                        }
+                        // 使用新token重试
+                        return toggleLike(blogId);
+                    }
+                    
+                    // 处理其他错误
+                    const errorText = await response.text();
+                    throw new Error(`操作失败: ${response.status} - ${errorText}`);
+                }
+                
+                // 解析响应数据
+                const data = await response.json();
+                console.log('点赞请求响应:', data);
+                
+                const likeButton = document.getElementById('likeButton');
+                const likeCount = document.getElementById('likeCount');
+                
+                // 更新点赞状态和计数
+                if (data.liked) {
+                    likeButton.classList.add('active');
+                } else {
+                    likeButton.classList.remove('active');
+                }
+                
+                // 更新点赞计数
+                likeCount.textContent = data.total_likes || 0;
+                
+            } catch (error) {
+                console.error('点赞操作失败:', error);
+                alert(`点赞操作失败: ${error.message}`);
+            }
+        }
+
+        // 检查用户是否已点赞
+        async function checkIfUserLiked(blogId) {
+            try {
+                const userId = getCurrentUserID();
+                if (!userId) return;
+                
+                const token = getAuthToken();
+                if (!token) return;
+                
+                console.log('检查点赞状态，博客ID:', blogId);
+                
+                const response = await fetch(`/user/blog/${blogId}/like/status`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (!response.ok) {
+                    if (response.status === 401) {
+                        const newToken = await refreshAuthToken();
+                        if (!newToken) return;
+                        // 使用新token重试
+                        return checkIfUserLiked(blogId);
+                    }
+                    console.error(`获取点赞状态失败: ${response.status}`);
+                    return;
+                }
+                
+                const data = await response.json();
+                console.log('点赞状态数据:', data);
+                
+                if (data.liked) {
+                    document.getElementById('likeButton').classList.add('active');
+                } else {
+                    document.getElementById('likeButton').classList.remove('active');
+                }
+                
+                // 更新点赞计数
+                document.getElementById('likeCount').textContent = data.total_likes || 0;
+                
+            } catch (error) {
+                console.error('检查点赞状态失败:', error);
+            }
+        }
+
+        // 显示添加博客模态框
+        function showAddModal() {
+            if (!checkLogin()) return;
+            
+            // 重置表单
+            document.getElementById('addForm').reset();
+            document.getElementById('addModal').style.display = 'block';
+        }
+
+        // 搜索博客
+        function searchBlogs() {
+            const searchInput = document.getElementById('searchInput');
+            currentSearchTitle = searchInput.value.trim();
+            
+            // 重置到第一页
+            currentPage = 1;
+            
+            // 添加搜索状态UI提示
+            if (currentSearchTitle) {
+                searchInput.classList.add('search-active');
+            } else {
+                searchInput.classList.remove('search-active');
             }
             
-            blogs.forEach(blog => {
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td>${blog.id || ''}</td>
-                    <td>${blog.title || '无标题'}</td>
-                    <td>${blog.content?.substring(0, 50) + (blog.content?.length > 50 ? '...' : '') || '无内容'}</td>
-                    <td>${blog.category || '无分类'}</td>
-                    <td>${blog.tags || '无标签'}</td>
-                    <td>${blog.status || '草稿'}</td>
-                    <td>${formatDate(blog.created_at)}</td>
-                    <td>
-                        <button class="btn btn-view" onclick="viewBlog(${blog.id})">查看</button>
-                        <button class="btn btn-edit" onclick="editBlog(${blog.id})">编辑</button>
-                        <button class="btn btn-delete" onclick="deleteBlog(${blog.id})">删除</button>
-                    </td>
-                `;
-                tbody.appendChild(tr);
-            });
+            loadBlogs();
         }
 
-        // 修改重置搜索函数
+        // 重置搜索
         function resetSearch() {
-            document.getElementById('searchInput').value = '';
+            const searchInput = document.getElementById('searchInput');
+            searchInput.value = '';
+            searchInput.classList.remove('search-active');
             currentSearchTitle = '';
             currentPage = 1;
-            loadBlogs(); // 重新加载所有博客
+            loadBlogs();
         }
 
-        // 添加搜索框回车事件监听
+        // 监听搜索输入框的Enter键
         document.getElementById('searchInput').addEventListener('keyup', function(event) {
             if (event.key === 'Enter') {
                 searchBlogs();
             }
         });
 
-        // 修改查看博客详情函数，修复数据显示问题
-        function viewBlog(id) {
-            const token = getAuthToken();
-            
-            // 显示加载状态
-            document.getElementById('viewBlogModal').style.display = 'block';
-            document.getElementById('blogDetail').innerHTML = '<div style="text-align:center;padding:20px;">加载中...</div>';
-            
-            fetch(`/user/blog/${id}`, {
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
-            })
-            .then(response => {
-                if (response.status === 401) {
-                    alert('请先登录');
-                    window.location.href = '/';
-                    return Promise.reject('Unauthorized');
-                }
-                if (!response.ok) {
-                    return response.json().then(err => Promise.reject(err));
-                }
-                return response.json();
-            })
-            .then(data => {
-                console.log('获取到的博客详情:', data);
-                
-                // 提取正确的博客数据结构
-                const blog = data.blog || data;
-                
-                if (!blog || !blog.title) {
-                    throw new Error('获取到的博客数据无效');
-                }
-                
-                const detailHtml = `
-                    <div class="blog-detail">
-                        <h3>${blog.title || ''}</h3>
-                        <p><strong>分类：</strong>${blog.category || '无分类'}</p>
-                        <p><strong>标签：</strong>${blog.tags || '无标签'}</p>
-                        <p><strong>状态：</strong>${blog.status === 'published' ? '已发布' : '草稿'}</p>
-                        <p><strong>创建时间：</strong>${formatDate(blog.created_at) || ''}</p>
-                        <div class="blog-content">
-                            ${blog.content || ''}
-                        </div>
-                    </div>
-                `;
-                
-                document.getElementById('blogDetail').innerHTML = detailHtml;
-                
-                // 更新点赞状态和数量
-                const likeButton = document.getElementById('likeButton');
-                const likeCount = document.getElementById('likeCount');
-                
-                // 设置点赞数
-                likeCount.textContent = blog.likes || 0;
-                
-                // 设置点赞按钮状态
-                if (blog.isLiked) {
-                    likeButton.classList.add('active');
-                    likeButton.style.color = '#ff0000';
-                } else {
-                    likeButton.classList.remove('active');
-                    likeButton.style.color = '#dc3545';
-                }
-                
-                // 更新点击处理
-                likeButton.onclick = () => {
-                    const isCurrentlyLiked = likeButton.classList.contains('active');
-                    if (isCurrentlyLiked) {
-                        dislikeBlog(id);
-                    } else {
-                        likeBlog(id);
-                    }
-                };
-            })
-            .catch(error => {
-                console.error('获取博客详情失败:', error);
-                document.getElementById('blogDetail').innerHTML = `
-                    <div style="color:red;text-align:center;padding:20px;">
-                        获取博客详情失败：${error.message || '请稍后再试'}
-                    </div>
-                `;
-            });
-        }
-
-        // 修改点赞函数
-        function likeBlog(id) {
-            const token = localStorage.getItem('token'); // 获取token
-            fetch(`/user/blog/${id}/like`, {
-                method: 'POST',
-                 headers: {
-                     'Authorization': `Bearer ${token}` // 添加Authorization头
-                 }
-            })
-            .then(response => {
-                 if (response.status === 401) {
-                     alert('请先登录');
-                     window.location.href = '/';
-                     return Promise.reject('Unauthorized');
-                 }
-                 if (!response.ok) {
-                     return response.json().then(err => Promise.reject(err));
-                 }
-                 return response.json();
-             })
-            .then(result => {
-                if (result.message) {
-                    const likeButton = document.getElementById('likeButton');
-                    const likeCount = document.getElementById('likeCount');
-                    
-                    // 更新点赞数和状态
-                    likeCount.textContent = parseInt(likeCount.textContent) + 1;
-                    likeButton.classList.add('active');
-                    likeButton.style.color = '#ff0000';
-                    
-                    // 刷新博客列表以更新数据
-                    loadBlogs();
-                } else {
-                    throw new Error(result.error || '点赞失败');
-                }
-            })
-            .catch(error => {
-                console.error('点赞失败:', error);
-                alert('点赞失败，请重试');
-            });
-        }
-
-        // 修改取消点赞函数
-        function dislikeBlog(id) {
-            const token = localStorage.getItem('token'); // 获取token
-            fetch(`/user/blog/${id}/dislike`, {
-                method: 'POST',
-                 headers: {
-                     'Authorization': `Bearer ${token}` // 添加Authorization头
-                 }
-            })
-            .then(response => {
-                 if (response.status === 401) {
-                     alert('请先登录');
-                     window.location.href = '/';
-                     return Promise.reject('Unauthorized');
-                 }
-                 if (!response.ok) {
-                     return response.json().then(err => Promise.reject(err));
-                 }
-                 return response.json();
-             })
-            .then(result => {
-                if (result.message) {
-                    const likeButton = document.getElementById('likeButton');
-                    const likeCount = document.getElementById('likeCount');
-                    const currentLikes = parseInt(likeCount.textContent);
-                    
-                    // 更新点赞数和状态
-                    if (currentLikes > 0) {
-                        likeCount.textContent = currentLikes - 1;
-                    }
-                    likeButton.classList.remove('active');
-                    likeButton.style.color = '#dc3545';
-                    
-                    // 刷新博客列表以更新数据
-                    loadBlogs();
-                } else {
-                    throw new Error(result.error || '取消点赞失败');
-                }
-            })
-            .catch(error => {
-                console.error('取消点赞失败:', error);
-                alert('取消点赞失败，请重试');
-            });
-        }
-
-        // 添加分页更新函数
-        function updatePagination() {
-            const pageInfo = document.getElementById('pageInfo');
-            pageInfo.textContent = `第 ${currentPage} 页 / 共 ${totalPages} 页`;
-
-            // 更新按钮状态
-            document.getElementById('prevBtn').disabled = currentPage <= 1;
-            document.getElementById('nextBtn').disabled = currentPage >= totalPages;
-            
-            // 更新页码输入框最大值
-            document.getElementById('pageInput').max = totalPages;
-        }
-
-        // 添加页码切换函数
-        function changePage(newPage) {
-            if (newPage < 1 || newPage > totalPages) return;
-            currentPage = newPage;
-            loadBlogs();
-        }
-
-        // 修改跳转页面函数
-        function jumpToPage() {
-            const pageInput = document.getElementById('pageInput');
-            const targetPage = parseInt(pageInput.value);
-            
-            if (isNaN(targetPage) || targetPage < 1 || targetPage > totalPages) {
-                alert(`请输入1到${totalPages}之间的页码`);
-                return;
+        // 页面加载时获取博客列表
+        document.addEventListener('DOMContentLoaded', function() {
+            // 检查登录状态
+            if (checkLogin()) {
+                loadBlogs();
             }
             
-            currentPage = targetPage;
-            loadBlogs();
-            pageInput.value = ''; // 清空输入框
-        }
+            // 避免表单因Enter键自动提交
+            document.querySelectorAll('form').forEach(form => {
+                form.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
+                        e.preventDefault();
+                    }
+                });
+            });
+        });
 
-        // 页面加载时获取博客列表
-        document.addEventListener('DOMContentLoaded', loadBlogs);
+        // 关闭模态框当点击模态框外部
+        window.onclick = function(event) {
+            if (event.target.className === 'modal') {
+                event.target.style.display = 'none';
+            }
+        };
     </script>
 </body>
 </html>

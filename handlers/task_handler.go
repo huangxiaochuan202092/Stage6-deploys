@@ -120,13 +120,28 @@ func CreateTask(c *gin.Context) {
 		deadline = &input.DueDate
 	}
 
+	// 根据类型分别处理userID
+	var creatorID uint
+	switch v := userID.(type) {
+	case float64:
+		creatorID = uint(v)
+	case uint:
+		creatorID = v
+	case int:
+		creatorID = uint(v)
+	default:
+		log.Printf("userID类型错误: %T, 值: %v", userID, userID)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "用户ID类型无效"})
+		return
+	}
+
 	task := &models.Task{
 		Title:       input.Title,
 		Description: input.Description,
 		Priority:    input.Priority,
 		Status:      input.Status,
 		Deadline:    deadline,
-		CreatorID:   uint(userID.(float64)), // 假设userID是float64类型
+		CreatorID:   creatorID,
 	}
 
 	if err := services.CreateTask(task); err != nil {

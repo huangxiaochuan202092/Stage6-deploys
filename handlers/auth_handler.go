@@ -3,6 +3,8 @@ package handlers
 import (
 	"log"
 	"net/http"
+	"proapp/utils"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
@@ -34,5 +36,32 @@ func ValidateToken(c *gin.Context) {
 			"id":   userID,
 			"role": userRole,
 		},
+	})
+}
+
+// RefreshToken 处理令牌刷新请求
+func RefreshToken(c *gin.Context) {
+	// 从授权头获取令牌
+	tokenString := c.GetHeader("Authorization")
+	if tokenString == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "未提供授权令牌"})
+		return
+	}
+
+	// 移除Bearer前缀
+	tokenString = strings.TrimPrefix(tokenString, "Bearer ")
+
+	// 刷新令牌
+	newToken, err := utils.RefreshToken(tokenString)
+	if err != nil {
+		log.Printf("刷新令牌失败: %v", err)
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "刷新令牌失败: " + err.Error()})
+		return
+	}
+
+	// 返回新令牌
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+		"token":  newToken,
 	})
 }

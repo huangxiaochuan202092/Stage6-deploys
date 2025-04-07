@@ -7,14 +7,20 @@ import (
 	"log"
 	"math/big"
 	"net/smtp"
+	"os"
 )
 
 // SendVerificationEmail 发送验证码邮件
 func SendVerificationEmail(email, code string) error {
-	from := "huangxiaochuan2020@163.com"
-	password := "GTsvVtBbzwzVqnJj"
-	smtpServer := "smtp.163.com"
-	smtpPort := "465"
+	// 从环境变量获取邮件配置
+	from := os.Getenv("EMAIL_FROM")
+	password := os.Getenv("EMAIL_PASSWORD")
+	smtpServer := os.Getenv("EMAIL_SMTP_SERVER")
+	smtpPort := os.Getenv("EMAIL_SMTP_PORT")
+	if from == "" || password == "" || smtpServer == "" || smtpPort == "" {
+		log.Println("SMTP configuration is missing")
+		return fmt.Errorf("SMTP configuration is missing")
+	}
 
 	if from == "" || password == "" || smtpServer == "" || smtpPort == "" {
 		log.Println("SMTP configuration is missing")

@@ -52,7 +52,7 @@ func LoginOrRegisterHandler(c *gin.Context) {
 	// 绑定 JSON 输入
 	if err := c.ShouldBindJSON(&input); err != nil {
 		log.Printf("绑定 JSON 失败: %v", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "输入格式不正确"})
 		return
 	}
 
@@ -85,22 +85,26 @@ func LoginOrRegisterHandler(c *gin.Context) {
 	// 检查用户是否存在
 	user, err := services.GetUserByEmail(input.Email)
 	if err != nil {
-		log.Printf("获取用户失败: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "数据库错误: " + err.Error()})
+		log.Printf("查询用户信息失败: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "查询用户信息失败: " + err.Error()})
 		return
 	}
-
-	log.Printf("获取用户结果: %+v", user)
 
 	// 如果用户不存在，则创建用户
 	if user == nil {
 		log.Printf("用户不存在，尝试创建新用户: email=%s", input.Email)
-		user, err = services.CreateUser(input.Email)
+
+		// 直接使用email创建用户
+		createdUser, err := services.CreateUser(input.Email)
 		if err != nil {
 			log.Printf("创建用户失败: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "创建用户失败: " + err.Error()})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "创建用户失败"})
 			return
 		}
+
+		user = createdUser
+
+		user = createdUser
 	}
 
 	// 删除验证码
@@ -236,86 +240,39 @@ func DeleteUserHandler(c *gin.Context) {
 
 	// 调用服务层删除用户
 	if err := services.DeleteUserByID(uint(idUint)); err != nil {
+		log.Printf("删除用户失败: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "删除用户失败"})
 		return
 	}
-
-	c.JSON(http.StatusOK, gin.H{"message": "删除用户成功"})
+	// 清除可能的查询缓存或实例状态
+	config.DB = config.DB.Session(&gorm.Session{NewDB: true})
+	c.JSON(http.StatusOK, gin.H{"message": "用户删除成功"})
 }
 
-// 获取用户信息
-func GetUserInfo(c *gin.Context) {
-	// 从 token 中获取用户 ID
-	userID, exists := c.Get("userID")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "未授权访问"})
-		return
-	}
-
-	user, err := services.GetUserByID(uint(userID.(float64)))
-	if err != nil {
-		log.Printf("获取用户信息失败: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "获取用户信息失败"})
-		return
-	}
-
-	if user == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "用户不存在"})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"user": gin.H{
-			"id":         user.ID,
-			"email":      user.Email,
-			"role":       user.Role,
-			"created_at": user.CreatedAt,
-		},
-	})
-}
-
-// 获取用户的任务列表
-func GetUserTasks(c *gin.Context) {
-	userID, exists := c.Get("userID")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "未授权访问"})
-		return
-	}
-
-	tasks, err := services.GetTasksByUserID(uint(userID.(float64)))
-	if err != nil {
-		log.Printf("获取用户任务失败: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "获取任务列表失败"})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"status": "success",
-		"tasks":  tasks,
-	})
-}
-
+// UpdateUserSelfHandler
 func UpdateUserSelfHandler(c *gin.Context) {
+	// 获取当前用户的 ID
 	userID, exists := c.Get("userID")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "未授权访问"})
 		return
 	}
 
+	// 解析请求体
 	var input struct {
 		Email string `json:"email" binding:"required,email"`
 	}
-
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	if err := services.UpdateUserEmail(uint(userID.(float64)), input.Email); err != nil {
-		log.Printf("更新用户信息失败: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "更新用户信息失败"})
+	// 更新用户信息
+	if err := services.UpdateUserFields(userID.(uint), map[string]interface{}{"email": input.Email}); err != nil {
+		log.Printf("更新用户失败: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "更新用户失败"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "更新用户信息成功"})
+	c.JSON(http.StatusOK, gin.H{"message": "用户信息更新成功"})
 }

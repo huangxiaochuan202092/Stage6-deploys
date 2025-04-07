@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
+	"strconv"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -12,10 +14,36 @@ import (
 var RedisClient *redis.Client
 
 func InitRedis() {
+	// 从环境变量获取Redis连接参数
+	redisHost := os.Getenv("REDIS_HOST")
+	log.Printf("连接Redis使用主机: %s", redisHost)
+	// 确保有默认值
+	if redisHost == "" {
+		redisHost = "host.docker.internal"
+	}
+
+	redisPort := os.Getenv("REDIS_PORT")
+	redisPassword := os.Getenv("REDIS_PASSWORD")
+	// 密码可以为空，不需要默认值
+
+	redisDB := 0 // 默认值
+	redisDBStr := os.Getenv("REDIS_DB")
+	if redisDBStr != "" {
+		var err error
+		redisDB, err = strconv.Atoi(redisDBStr)
+		if err != nil {
+			log.Printf("Invalid REDIS_DB value, using default: %v", err)
+			redisDB = 0
+		}
+	}
+
+	// 构建Redis地址
+	redisAddr := fmt.Sprintf("%s:%s", redisHost, redisPort)
+
 	RedisClient = redis.NewClient(&redis.Options{
-		Addr:     "localhost:6379",
-		Password: "",
-		DB:       0,
+		Addr:     redisAddr,
+		Password: redisPassword,
+		DB:       redisDB,
 	})
 	ctx := context.Background()
 	_, err := RedisClient.Ping(ctx).Result()
